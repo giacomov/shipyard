@@ -20,7 +20,6 @@ import os
 import re
 import subprocess
 import sys
-from pathlib import Path
 
 
 def gh(args: list[str]) -> str:
@@ -98,7 +97,7 @@ def resolve_epic_number(
                 data = gh_graphql(parent_query, {"owner": owner, "repo": repo_name, "number": n})
                 parent = data["repository"]["issue"].get("parent")
                 if parent:
-                    label_names = [l["name"] for l in parent["labels"]["nodes"]]
+                    label_names = [lbl["name"] for lbl in parent["labels"]["nodes"]]
                     if "in-progress" in label_names:
                         print(f"Found epic #{parent['number']} via GraphQL parent of #{n}.")
                         return parent["number"]
@@ -166,6 +165,10 @@ def main() -> None:
 
     owner, repo_name = repo.split("/", 1)
     issue_number = int(issue_num_str) if issue_num_str.strip() else None
+
+    if event in ("issues", "workflow_dispatch") and not issue_num_str.strip():
+        print("Error: ISSUE_NUMBER is required for issues/workflow_dispatch events.", file=sys.stderr)
+        sys.exit(1)
 
     epic_number = resolve_epic_number(event, issue_number, pr_body, owner, repo_name)
     if epic_number is None:

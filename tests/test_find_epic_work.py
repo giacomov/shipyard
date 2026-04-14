@@ -1,7 +1,4 @@
-import json
-import os
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from scripts.find_epic_work import (
     parse_closing_references,
     find_unblocked_sub_issues,

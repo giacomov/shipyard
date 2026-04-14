@@ -55,8 +55,6 @@ def _parse_goal(text: str) -> str:
 
 def _split_task_blocks(text: str) -> list[str]:
     """Split on '### Task N:' boundaries (ignores those inside code fences)."""
-    boundary_pattern = re.compile(r"^### Task \d+:", re.MULTILINE)
-
     # Find positions of ### Task N: lines that are NOT inside code fences
     lines = text.split("\n")
     in_fence = False
