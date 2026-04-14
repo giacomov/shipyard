@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 from scripts.executor import (
     parse_implementer_status,
     parse_review_verdict,
@@ -58,11 +58,10 @@ def test_close_issues_body():
 
 @pytest.mark.asyncio
 @patch("scripts.executor.run_agent", new_callable=AsyncMock)
-@patch("scripts.executor.git_head_sha", return_value="abc123")
 @patch("scripts.executor.git_reset_hard")
 @patch("scripts.executor.post_issue_comment")
 @patch("scripts.executor.create_pull_request", return_value="https://github.com/o/r/pull/9")
-async def test_pipeline_happy_path(mock_pr, mock_comment, mock_reset, mock_sha, mock_agent):
+async def test_pipeline_happy_path(mock_pr, mock_comment, mock_reset, mock_agent):
     mock_agent.side_effect = [
         "Status: DONE\nFiles: foo.py",   # implementer
         "APPROVED",                        # spec reviewer
@@ -82,10 +81,9 @@ async def test_pipeline_happy_path(mock_pr, mock_comment, mock_reset, mock_sha, 
 
 @pytest.mark.asyncio
 @patch("scripts.executor.run_agent", new_callable=AsyncMock)
-@patch("scripts.executor.git_head_sha", return_value="abc123")
 @patch("scripts.executor.git_reset_hard")
 @patch("scripts.executor.post_issue_comment")
-async def test_pipeline_blocked_resets_and_comments(mock_comment, mock_reset, mock_sha, mock_agent):
+async def test_pipeline_blocked_resets_and_comments(mock_comment, mock_reset, mock_agent):
     mock_agent.return_value = "BLOCKED\nCannot find module X"
     from scripts.executor import run_issue_pipeline
     issue = IssueWork(number=5, title="Do X", body="spec")
@@ -103,10 +101,9 @@ async def test_pipeline_blocked_resets_and_comments(mock_comment, mock_reset, mo
 
 @pytest.mark.asyncio
 @patch("scripts.executor.run_agent", new_callable=AsyncMock)
-@patch("scripts.executor.git_head_sha", return_value="abc123")
 @patch("scripts.executor.git_reset_hard")
 @patch("scripts.executor.post_issue_comment")
-async def test_pipeline_spec_failure_triggers_retry(mock_comment, mock_reset, mock_sha, mock_agent):
+async def test_pipeline_spec_failure_triggers_retry(mock_comment, mock_reset, mock_agent):
     mock_agent.side_effect = [
         "Status: DONE\nFiles: foo.py",         # implementer attempt 1
         "CHANGES_REQUESTED\nMissing test",      # spec reviewer

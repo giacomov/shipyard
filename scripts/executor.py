@@ -25,7 +25,7 @@ from enum import Enum
 from pathlib import Path
 
 from claude_agent_sdk import query, ClaudeAgentOptions
-from claude_agent_sdk import AssistantMessage, TextBlock, ResultMessage
+from claude_agent_sdk import AssistantMessage, TextBlock
 
 PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
@@ -73,8 +73,11 @@ def parse_implementer_status(output: str) -> ImplementerStatus:
 
 
 def parse_review_verdict(output: str) -> bool:
-    """Return True if reviewer output contains APPROVED."""
-    return "APPROVED" in output.upper() and "CHANGES_REQUESTED" not in output.upper()
+    """Return True only if output contains the standalone token APPROVED."""
+    upper = output.upper()
+    if "CHANGES_REQUESTED" in upper:
+        return False
+    return bool(re.search(r"(?<!NOT )\bAPPROVED\b", upper))
 
 
 def format_prompt(template: str, **kwargs: str) -> str:
@@ -269,7 +272,7 @@ async def run_issue_pipeline(
         # Both reviews passed
         return True
 
-    return False  # exhausted retries
+    assert False, "unreachable: all loop iterations terminate via return"
 
 
 async def run_all_issues(work: WorkSpec) -> dict[int, bool]:
