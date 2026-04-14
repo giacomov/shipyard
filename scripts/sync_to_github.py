@@ -15,7 +15,6 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 
 @dataclass
@@ -47,12 +46,12 @@ def gh(args: list[str], dry_run: bool = False, dry_label: str = "") -> str:
     return result.stdout.strip()
 
 
-def resolve_repo(repo_flag: Optional[str], dry_run: bool) -> str:
+def resolve_repo(repo_flag: str | None, dry_run: bool) -> str:
     """Return 'owner/repo'. Uses gh repo view if repo_flag is None."""
     if repo_flag:
         return repo_flag
-    result = gh(["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"])
-    if dry_run and not result:
+    result = gh(["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"], dry_run=dry_run)
+    if not result:
         return "<owner>/<repo>"
     return result
 
@@ -121,7 +120,7 @@ def add_blocked_by(
         if "404" in msg or "Not Found" in msg:
             print(f"   WARNING: dependencies API not available for this repo ({msg.splitlines()[0]})")
         else:
-            print(f"   WARNING: blocked-by failed: {msg.splitlines()[0]}")
+            raise
 
 
 def ensure_label_exists(repo: str, name: str, color: str, description: str) -> None:
@@ -225,8 +224,12 @@ def sync(data: dict, repo: str, dry_run: bool) -> int:
             if not blocked or not blocking:
                 continue
             print(f"   #{blocked.number if not dry_run else f'({blocked_id})'} blocked by #{blocking.number if not dry_run else f'({blocking_id})'}")
-            add_blocked_by(repo, blocked.number, blocked.database_id,
-                           blocking.number, blocking.database_id, dry_run)
+            try:
+                add_blocked_by(repo, blocked.number, blocked.database_id,
+                               blocking.number, blocking.database_id, dry_run)
+            except RuntimeError as e:
+                print(f"   FAILED: {e}")
+                failures.append(f"blocked-by for {blocked_id}→{blocking_id}: {e}")
 
     # 5. Add in-progress label to epic
     print("\n── Marking epic as in-progress")
@@ -260,12 +263,13 @@ def validate(data: dict) -> None:
         raise ValueError('Input JSON must have a "title" string field.')
     if not data.get("tasks"):
         raise ValueError('Input JSON must have a non-empty "tasks" array.')
-    ids = {t["id"] for t in data["tasks"]}
     for task in data["tasks"]:
         if not task.get("id"):
             raise ValueError(f'Task missing "id": {task}')
         if not task.get("subject"):
             raise ValueError(f'Task {task["id"]} missing "subject".')
+    ids = {t["id"] for t in data["tasks"]}
+    for task in data["tasks"]:
         for dep in task.get("dependencies", []):
             if dep not in ids:
                 raise ValueError(f'Task {task["id"]} has unknown dependency "{dep}".')

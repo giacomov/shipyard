@@ -1,14 +1,10 @@
-import json
 import pytest
-from unittest.mock import patch, call
+from unittest.mock import patch
 from scripts.sync_to_github import (
     gh,
-    resolve_repo,
     create_issue,
-    add_sub_issue,
     add_blocked_by,
     task_body,
-    IssueRef,
 )
 
 
@@ -32,10 +28,6 @@ def test_gh_raises_on_nonzero(mock_subprocess):
 
 @patch("scripts.sync_to_github.subprocess")
 def test_create_issue_parses_number_from_url(mock_subprocess):
-    mock_subprocess.run.return_value.returncode = 0
-    mock_subprocess.run.return_value.stdout = (
-        "https://github.com/owner/repo/issues/42\n"
-    )
     # Second call for database id
     mock_subprocess.run.side_effect = [
         type("R", (), {"returncode": 0, "stdout": "https://github.com/owner/repo/issues/42\n", "stderr": ""})(),
