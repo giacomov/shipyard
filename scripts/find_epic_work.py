@@ -176,7 +176,9 @@ def main() -> None:
         return
 
     print(f"Epic: #{epic_number}")
-    epic = gh_get(f"repos/{repo}/issues/{epic_number}")
+    epic_raw = gh_get(f"repos/{repo}/issues/{epic_number}")
+    assert isinstance(epic_raw, dict), f"Expected dict from issues API, got {type(epic_raw)}"
+    epic: dict = epic_raw
     unblocked = find_unblocked_sub_issues(epic_number, repo)
 
     if not unblocked:
