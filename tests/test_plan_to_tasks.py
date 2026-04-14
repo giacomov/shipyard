@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 import pytest
-from scripts.plan_to_tasks import parse_plan, validate_plan, plan_to_tasks_dict, ParsedPlan, ParsedTask
+from scripts.plan_to_tasks import parse_plan, validate_plan, plan_to_tasks_dict
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -60,8 +60,4 @@ def test_full_round_trip():
     plan = parse_plan(plan_text)
     validate_plan(plan)
     result = plan_to_tasks_dict(plan)
-    assert result["title"] == expected["title"]
-    assert result["body"] == expected["body"]
-    assert len(result["tasks"]) == len(expected["tasks"])
-    assert result["tasks"][0]["id"] == expected["tasks"][0]["id"]
-    assert result["tasks"][1]["dependencies"] == expected["tasks"][1]["dependencies"]
+    assert result == expected

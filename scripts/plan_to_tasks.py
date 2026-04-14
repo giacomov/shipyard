@@ -30,18 +30,15 @@ def parse_plan(text: str) -> ParsedPlan:
     title = _parse_title(text)
     body = _parse_goal(text)
     task_blocks = _split_task_blocks(text)
-    # Build id map first so we can resolve dependency references
-    id_map: dict[str, str] = {}
     raw_tasks = []
     for block in task_blocks:
         m = re.match(r"^### Task (\d+):\s*(.+)$", block, re.MULTILINE)
         if not m:
             continue
         task_id = m.group(1)
-        id_map[task_id] = task_id
         raw_tasks.append((task_id, m.group(2).strip(), block))
 
-    tasks = [_parse_task_block(task_id, subject, block, id_map)
+    tasks = [_parse_task_block(task_id, subject, block)
              for task_id, subject, block in raw_tasks]
     return ParsedPlan(title=title, body=body, tasks=tasks)
 
@@ -57,20 +54,44 @@ def _parse_goal(text: str) -> str:
 
 
 def _split_task_blocks(text: str) -> list[str]:
-    """Split on '### Task N:' boundaries, return each block."""
-    parts = re.split(r"(?=^### Task \d+:)", text, flags=re.MULTILINE)
-    return [p.strip() for p in parts if re.match(r"^### Task \d+:", p.strip())]
+    """Split on '### Task N:' boundaries (ignores those inside code fences)."""
+    boundary_pattern = re.compile(r"^### Task \d+:", re.MULTILINE)
+
+    # Find positions of ### Task N: lines that are NOT inside code fences
+    lines = text.split("\n")
+    in_fence = False
+    char_pos = 0
+    char_positions: list[int] = []  # char positions of task headers
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            in_fence = not in_fence
+        elif not in_fence and re.match(r"^### Task \d+:", line):
+            char_positions.append(char_pos)
+        char_pos += len(line) + 1  # +1 for the newline
+
+    if not char_positions:
+        return []
+
+    blocks = []
+    for i, start in enumerate(char_positions):
+        end = char_positions[i + 1] if i + 1 < len(char_positions) else len(text)
+        block = text[start:end].strip()
+        if block:
+            blocks.append(block)
+    return blocks
 
 
 def _parse_task_block(
-    task_id: str, subject: str, block: str, id_map: dict[str, str]
+    task_id: str, subject: str, block: str
 ) -> ParsedTask:
-    deps = _parse_depends_on(block, id_map)
+    deps = _parse_depends_on(block)
     description = _extract_description(block)
     return ParsedTask(id=task_id, subject=subject, description=description, dependencies=deps)
 
 
-def _parse_depends_on(block: str, id_map: dict[str, str]) -> list[str]:
+def _parse_depends_on(block: str) -> list[str]:
     """Extract dependency ids from a '**Depends on:**' line."""
     m = re.search(r"^\*\*Depends on:\*\*\s*(.+)$", block, re.MULTILINE)
     if not m:
@@ -82,8 +103,8 @@ def _parse_depends_on(block: str, id_map: dict[str, str]) -> list[str]:
     numbers = re.findall(r"Task\s+(\d+)", raw, re.IGNORECASE)
     if not numbers:
         return []
-    # Validate and resolve — unknown refs will be caught by validate_plan
-    return [n for n in numbers]
+    # Unknown refs will be caught by validate_plan
+    return numbers
 
 
 def _extract_description(block: str) -> str:
@@ -122,7 +143,7 @@ def validate_plan(plan: ParsedPlan) -> None:
                 )
 
 
-def plan_to_tasks_dict(plan: ParsedPlan) -> dict:
+def plan_to_tasks_dict(plan: ParsedPlan) -> dict[str, object]:
     """Convert ParsedPlan to the tasks.json dict structure."""
     return {
         "title": plan.title,
@@ -147,7 +168,11 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.input:
-        text = args.input.read_text()
+        try:
+            text = args.input.read_text()
+        except FileNotFoundError:
+            print(f"Error: input file not found: {args.input}", file=sys.stderr)
+            sys.exit(1)
     else:
         text = sys.stdin.read()
 
