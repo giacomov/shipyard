@@ -4,7 +4,11 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
     "claude-agent-sdk>=0.1.0",
+    "click>=8.0",
 ]
+
+[project.scripts]
+shipyard = "shipyard.cli:main"
 
 [project.optional-dependencies]
 dev = [
@@ -23,4 +27,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["scripts*"]
+include = ["shipyard*"]
+
+[tool.setuptools.package-data]
+shipyard = ["templates/*.yml", "prompts/*.md"]
