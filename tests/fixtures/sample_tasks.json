@@ -1,0 +1,20 @@
+{
+  "title": "Sample Feature Implementation Plan",
+  "body": "Build something simple for testing the parser.",
+  "tasks": [
+    {
+      "id": "1",
+      "subject": "Setup",
+      "description": "Create the project scaffold.\n\n- [ ] **Step 1: Write the test**\n\n```python\ndef test_scaffold():\n    assert True\n```\n\n- [ ] **Step 2: Commit**\n\n```bash\ngit commit -m \"feat: scaffold\"\n```",
+      "status": "pending",
+      "dependencies": []
+    },
+    {
+      "id": "2",
+      "subject": "Implementation",
+      "description": "Implement the main feature using the scaffold from Task 1.\n\n- [ ] **Step 1: Write the implementation**\n\n```python\ndef feature():\n    return 42\n```",
+      "status": "pending",
+      "dependencies": ["1"]
+    }
+  ]
+}
