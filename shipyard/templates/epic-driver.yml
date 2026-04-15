@@ -1,0 +1,93 @@
+name: Epic Driver
+
+on:
+  issues:
+    types: [labeled]
+  pull_request:
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Epic issue number to drive"
+        required: true
+        type: string
+
+jobs:
+  find-work:
+    name: Find unblocked issues
+    if: |
+      (github.event_name == 'issues' &&
+       github.event.label.name == 'in-progress' &&
+       github.event.issue.pull_request == '') ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.merged == true) ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    outputs:
+      has_work: ${{ steps.find-work.outputs.has_work }}
+      work_json: ${{ steps.find-work.outputs.work_json }}
+
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install shipyard
+        run: pip install shipyard==SHIPYARD_VERSION
+
+      - name: Find epic and unblocked issues
+        id: find-work
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number || '' }}
+          PR_BODY: ${{ github.event.pull_request.body || '' }}
+        run: shipyard find-work
+
+  execute:
+    name: Execute tasks with Agent SDK
+    needs: find-work
+    if: needs.find-work.outputs.has_work == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install shipyard
+        run: pip install shipyard==SHIPYARD_VERSION
+
+      - name: Run executor
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          WORK_JSON: ${{ needs.find-work.outputs.work_json }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: shipyard execute
