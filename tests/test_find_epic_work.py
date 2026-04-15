@@ -1,5 +1,5 @@
 from unittest.mock import patch
-from scripts.find_epic_work import (
+from shipyard.commands.find_work import (
     parse_closing_references,
     find_unblocked_sub_issues,
     build_work_json,
@@ -21,9 +21,8 @@ def test_parse_closing_references_case_insensitive():
     assert parse_closing_references("CLOSES #5") == [5]
 
 
-@patch("scripts.find_epic_work.gh_get")
+@patch("shipyard.commands.find_work.gh_get")
 def test_find_unblocked_filters_open_blockers(mock_get):
-    # Issue 2 has an open blocker, issue 3 is unblocked
     def side_effect(path):
         if "sub_issues" in path:
             return [
@@ -32,9 +31,9 @@ def test_find_unblocked_filters_open_blockers(mock_get):
                 {"number": 4, "state": "closed", "title": "Task C", "body": ""},
             ]
         if "2/dependencies" in path:
-            return [{"state": "open", "number": 1}]  # open blocker
+            return [{"state": "open", "number": 1}]
         if "3/dependencies" in path:
-            return []  # no blockers
+            return []
         return []
     mock_get.side_effect = side_effect
     result = find_unblocked_sub_issues(10, "owner/repo")
@@ -59,7 +58,7 @@ def test_set_output_to_stdout_when_no_github_output(capsys, monkeypatch):
     assert "has_work" in captured.out
 
 
-@patch("scripts.find_epic_work.gh_graphql")
+@patch("shipyard.commands.find_work.gh_graphql")
 def test_resolve_epic_pr_event_graphql_path(mock_gql, monkeypatch):
     monkeypatch.setenv("GITHUB_REPOSITORY", "owner/repo")
     mock_gql.return_value = {
