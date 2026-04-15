@@ -10,7 +10,15 @@ def test_sync_dry_run_reads_stdin():
     data = {
         "title": "My Epic",
         "body": "Goal.",
-        "tasks": [{"id": "1", "subject": "Task A", "description": "Do A.", "status": "pending", "dependencies": []}],
+        "tasks": [
+            {
+                "id": "1",
+                "subject": "Task A",
+                "description": "Do A.",
+                "status": "pending",
+                "dependencies": [],
+            }
+        ],
     }
     result = runner.invoke(sync, ["--dry-run"], input=json.dumps(data))
     assert result.exit_code == 0

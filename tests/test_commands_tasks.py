@@ -10,7 +10,9 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 def test_tasks_reads_stdin_outputs_json():
     runner = CliRunner()
-    plan_text = "# My Plan\n\n**Goal:** Do X.\n\n### Task 1: Alpha\n\n**Depends on:** (none)\n\nDo alpha.\n"
+    plan_text = (
+        "# My Plan\n\n**Goal:** Do X.\n\n### Task 1: Alpha\n\n**Depends on:** (none)\n\nDo alpha.\n"
+    )
     result = runner.invoke(tasks, input=plan_text)
     assert result.exit_code == 0
     data = json.loads(result.output)

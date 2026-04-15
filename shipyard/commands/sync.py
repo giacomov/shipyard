@@ -34,8 +34,7 @@ def gh(args: list[str], dry_run: bool = False, dry_label: str = "") -> str:
     )
     if result.returncode != 0:
         raise RuntimeError(
-            f"gh command failed (exit {result.returncode}): "
-            f"gh {' '.join(args)}\n{result.stderr}"
+            f"gh command failed (exit {result.returncode}): gh {' '.join(args)}\n{result.stderr}"
         )
     return result.stdout.strip()
 
@@ -44,15 +43,15 @@ def resolve_repo(repo_flag: str | None, dry_run: bool) -> str:
     """Return 'owner/repo'. Uses gh repo view if repo_flag is None."""
     if repo_flag:
         return repo_flag
-    result = gh(["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"], dry_run=dry_run)
+    result = gh(
+        ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"], dry_run=dry_run
+    )
     if not result:
         return "<owner>/<repo>"
     return result
 
 
-def create_issue(
-    repo: str, title: str, body: str, dry_run: bool
-) -> IssueRef:
+def create_issue(repo: str, title: str, body: str, dry_run: bool) -> IssueRef:
     """Create a GitHub issue and return IssueRef with number, url, database_id."""
     if dry_run:
         print(f"  [dry-run] gh issue create: {title}")
@@ -78,10 +77,14 @@ def add_sub_issue(
     owner, repo_name = repo.split("/", 1)
     gh(
         [
-            "api", "--preview", "issues",
+            "api",
+            "--preview",
+            "issues",
             f"repos/{owner}/{repo_name}/issues/{parent_number}/sub_issues",
-            "--method", "POST",
-            "-F", f"sub_issue_id={child_database_id}",
+            "--method",
+            "POST",
+            "-F",
+            f"sub_issue_id={child_database_id}",
         ],
         dry_run=dry_run,
         dry_label=f"add #{child_number} as sub-issue of #{parent_number}",
@@ -103,8 +106,10 @@ def add_blocked_by(
             [
                 "api",
                 f"repos/{owner}/{repo_name}/issues/{blocked_number}/dependencies/blocked_by",
-                "--method", "POST",
-                "-F", f"issue_id={blocking_database_id}",
+                "--method",
+                "POST",
+                "-F",
+                f"issue_id={blocking_database_id}",
             ],
             dry_run=dry_run,
             dry_label=f"mark #{blocked_number} blocked by #{blocking_number}",
@@ -112,7 +117,9 @@ def add_blocked_by(
     except RuntimeError as e:
         msg = str(e)
         if "404" in msg or "Not Found" in msg:
-            print(f"   WARNING: dependencies API not available for this repo ({msg.splitlines()[0]})")
+            print(
+                f"   WARNING: dependencies API not available for this repo ({msg.splitlines()[0]})"
+            )
         else:
             raise
 
@@ -129,8 +136,7 @@ def add_in_progress_label(repo: str, issue_number: int, dry_run: bool) -> None:
     """Ensure 'in-progress' label exists, then apply it to the issue."""
     if not dry_run:
         ensure_label_exists(
-            repo, "in-progress", "0075ca",
-            "Work is actively being driven by the epic driver"
+            repo, "in-progress", "0075ca", "Work is actively being driven by the epic driver"
         )
     gh(
         ["issue", "edit", str(issue_number), "--repo", repo, "--add-label", "in-progress"],
@@ -206,9 +212,7 @@ def run_sync(data: dict, repo: str, dry_run: bool) -> int:
 
     # 4. Wire blocked-by edges
     dep_edges = [
-        (task["id"], dep)
-        for task in data["tasks"]
-        for dep in task.get("dependencies", [])
+        (task["id"], dep) for task in data["tasks"] for dep in task.get("dependencies", [])
     ]
     if dep_edges:
         print("\n── Adding blocked-by relationships")
@@ -217,10 +221,18 @@ def run_sync(data: dict, repo: str, dry_run: bool) -> int:
             blocking = issue_map.get(blocking_id)
             if not blocked or not blocking:
                 continue
-            print(f"   #{blocked.number if not dry_run else f'({blocked_id})'} blocked by #{blocking.number if not dry_run else f'({blocking_id})'}")
+            print(
+                f"   #{blocked.number if not dry_run else f'({blocked_id})'} blocked by #{blocking.number if not dry_run else f'({blocking_id})'}"
+            )
             try:
-                add_blocked_by(repo, blocked.number, blocked.database_id,
-                               blocking.number, blocking.database_id, dry_run)
+                add_blocked_by(
+                    repo,
+                    blocked.number,
+                    blocked.database_id,
+                    blocking.number,
+                    blocking.database_id,
+                    dry_run,
+                )
             except RuntimeError as e:
                 print(f"   FAILED: {e}")
                 failures.append(f"blocked-by for {blocked_id}→{blocking_id}: {e}")
@@ -270,8 +282,14 @@ def validate(data: dict) -> None:
 
 
 @click.command()
-@click.option("-i", "--input", "input_file", type=click.Path(exists=True), default=None,
-              help="Input tasks.json (default: stdin)")
+@click.option(
+    "-i",
+    "--input",
+    "input_file",
+    type=click.Path(exists=True),
+    default=None,
+    help="Input tasks.json (default: stdin)",
+)
 @click.option("--repo", default=None, help="Target repo as owner/repo (default: auto-detect)")
 @click.option("--dry-run", is_flag=True, help="Print actions without making API calls")
 def sync(input_file: str | None, repo: str | None, dry_run: bool) -> None:

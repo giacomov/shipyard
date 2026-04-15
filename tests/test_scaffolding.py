@@ -20,8 +20,10 @@ def test_required_files_exist():
 
 
 def test_cli_entry_point_lists_all_commands():
-    from shipyard.cli import main
     from click.testing import CliRunner
+
+    from shipyard.cli import main
+
     runner = CliRunner()
     result = runner.invoke(main, ["--help"])
     assert result.exit_code == 0

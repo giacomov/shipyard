@@ -1,8 +1,9 @@
-import yaml
 from pathlib import Path
 
+import yaml
 
 # ── Dogfood workflow (this repo's own .github/workflows/epic-driver.yml) ──
+
 
 def test_epic_driver_workflow_valid_yaml():
     path = Path(".github/workflows/epic-driver.yml")
@@ -28,6 +29,7 @@ def test_execute_job_installs_claude_code_cli():
 
 
 # ── Bundled template (shipped inside the package) ──
+
 
 def test_template_workflow_valid_yaml():
     path = Path("shipyard/templates/epic-driver.yml")

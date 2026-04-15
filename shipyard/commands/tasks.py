@@ -39,8 +39,9 @@ def parse_plan(text: str) -> ParsedPlan:
         task_id = m.group(1)
         raw_tasks.append((task_id, m.group(2).strip(), block))
 
-    tasks_list = [_parse_task_block(task_id, subject, block)
-                  for task_id, subject, block in raw_tasks]
+    tasks_list = [
+        _parse_task_block(task_id, subject, block) for task_id, subject, block in raw_tasks
+    ]
     return ParsedPlan(title=title, body=body, tasks=tasks_list)
 
 
@@ -152,10 +153,22 @@ def plan_to_tasks_dict(plan: ParsedPlan) -> dict[str, object]:
 
 
 @click.command()
-@click.option("-i", "--input", "input_file", type=click.Path(exists=True), default=None,
-              help="Input markdown file (default: stdin)")
-@click.option("-o", "--output", "output_file", type=click.Path(), default=None,
-              help="Output JSON file (default: stdout)")
+@click.option(
+    "-i",
+    "--input",
+    "input_file",
+    type=click.Path(exists=True),
+    default=None,
+    help="Input markdown file (default: stdin)",
+)
+@click.option(
+    "-o",
+    "--output",
+    "output_file",
+    type=click.Path(),
+    default=None,
+    help="Output JSON file (default: stdout)",
+)
 def tasks(input_file: str | None, output_file: str | None) -> None:
     """Parse a markdown plan into task JSON."""
     if input_file:

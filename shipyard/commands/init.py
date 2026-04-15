@@ -17,9 +17,7 @@ def init(path: str, force: bool) -> None:
     dest = Path(path) / ".github" / "workflows" / "epic-driver.yml"
 
     if dest.exists() and not force:
-        raise click.ClickException(
-            f"{dest} already exists. Use --force to overwrite."
-        )
+        raise click.ClickException(f"{dest} already exists. Use --force to overwrite.")
 
     try:
         version = importlib.metadata.version("shipyard")

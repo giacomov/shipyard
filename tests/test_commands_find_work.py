@@ -1,5 +1,7 @@
 from unittest.mock import patch
+
 from click.testing import CliRunner
+
 from shipyard.commands.find_work import find_work
 
 

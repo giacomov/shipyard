@@ -95,8 +95,22 @@ def resolve_epic_number(
         print("GraphQL parent lookup found nothing — falling back to label search.")
         repo = f"{owner}/{repo_name}"
         candidates = json.loads(
-            gh(["issue", "list", "--repo", repo, "--state", "open",
-                "--label", "in-progress", "--json", "number", "--limit", "50"])
+            gh(
+                [
+                    "issue",
+                    "list",
+                    "--repo",
+                    repo,
+                    "--state",
+                    "open",
+                    "--label",
+                    "in-progress",
+                    "--json",
+                    "number",
+                    "--limit",
+                    "50",
+                ]
+            )
         )
         for candidate in candidates:
             subs = gh_get(f"repos/{repo}/issues/{candidate['number']}/sub_issues")

@@ -1,23 +1,31 @@
 import json
 from pathlib import Path
+
 import pytest
-from shipyard.commands.tasks import parse_plan, validate_plan, plan_to_tasks_dict
+
+from shipyard.commands.tasks import parse_plan, plan_to_tasks_dict, validate_plan
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def test_parses_title_from_h1():
-    plan = parse_plan("# My Feature Plan\n\n**Goal:** Do X.\n\n### Task 1: Setup\n\n**Depends on:** (none)\n\nDesc.\n")
+    plan = parse_plan(
+        "# My Feature Plan\n\n**Goal:** Do X.\n\n### Task 1: Setup\n\n**Depends on:** (none)\n\nDesc.\n"
+    )
     assert plan.title == "My Feature Plan"
 
 
 def test_parses_goal_as_body():
-    plan = parse_plan("# Title\n\n**Goal:** Build Y.\n\n### Task 1: A\n\n**Depends on:** (none)\n\nDesc.\n")
+    plan = parse_plan(
+        "# Title\n\n**Goal:** Build Y.\n\n### Task 1: A\n\n**Depends on:** (none)\n\nDesc.\n"
+    )
     assert plan.body == "Build Y."
 
 
 def test_parses_tasks_by_header():
-    plan = parse_plan("# T\n\n**Goal:** X.\n\n### Task 1: Alpha\n\n**Depends on:** (none)\n\nAlpha desc.\n\n### Task 2: Beta\n\n**Depends on:** Task 1\n\nBeta desc.\n")
+    plan = parse_plan(
+        "# T\n\n**Goal:** X.\n\n### Task 1: Alpha\n\n**Depends on:** (none)\n\nAlpha desc.\n\n### Task 2: Beta\n\n**Depends on:** Task 1\n\nBeta desc.\n"
+    )
     assert len(plan.tasks) == 2
     assert plan.tasks[0].id == "1"
     assert plan.tasks[0].subject == "Alpha"
@@ -48,7 +56,9 @@ def test_validates_unknown_dependency_raises():
 
 
 def test_description_excludes_header_and_depends_on_lines():
-    plan = parse_plan("# T\n\n**Goal:** X.\n\n### Task 1: Setup\n\n**Depends on:** (none)\n\nActual description here.\n")
+    plan = parse_plan(
+        "# T\n\n**Goal:** X.\n\n### Task 1: Setup\n\n**Depends on:** (none)\n\nActual description here.\n"
+    )
     assert "### Task 1" not in plan.tasks[0].description
     assert "**Depends on:**" not in plan.tasks[0].description
     assert "Actual description here." in plan.tasks[0].description

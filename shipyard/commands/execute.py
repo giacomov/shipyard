@@ -12,8 +12,7 @@ from enum import Enum
 from pathlib import Path
 
 import click
-from claude_agent_sdk import query, ClaudeAgentOptions
-from claude_agent_sdk import AssistantMessage, TextBlock
+from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, TextBlock, query
 
 PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
@@ -44,6 +43,7 @@ class WorkSpec:
 # ---------------------------------------------------------------------------
 # Parsing helpers
 # ---------------------------------------------------------------------------
+
 
 def parse_implementer_status(output: str) -> ImplementerStatus:
     """Extract status from implementer output. Defaults to BLOCKED if not found.
@@ -86,6 +86,7 @@ def close_issues_body(issue_numbers: list[int]) -> str:
 # Agent SDK
 # ---------------------------------------------------------------------------
 
+
 async def run_agent(prompt: str, options: ClaudeAgentOptions) -> str:
     """Run an agent and return all text output concatenated."""
     output_parts: list[str] = []
@@ -110,6 +111,7 @@ def make_agent_options(cwd: str) -> ClaudeAgentOptions:
 # Git helpers
 # ---------------------------------------------------------------------------
 
+
 def git_head_sha() -> str:
     return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
 
@@ -130,6 +132,7 @@ def git_push_branch(branch: str) -> None:
 # GitHub helpers
 # ---------------------------------------------------------------------------
 
+
 def post_issue_comment(repo: str, issue_number: int, body: str) -> None:
     """Post a comment on the GitHub issue."""
     subprocess.run(
@@ -142,12 +145,19 @@ def create_pull_request(repo: str, branch: str, title: str, body: str) -> str:
     """Create PR and return its URL."""
     result = subprocess.run(
         [
-            "gh", "pr", "create",
-            "--repo", repo,
-            "--base", "main",
-            "--head", branch,
-            "--title", title,
-            "--body", body,
+            "gh",
+            "pr",
+            "create",
+            "--repo",
+            repo,
+            "--base",
+            "main",
+            "--head",
+            branch,
+            "--title",
+            title,
+            "--body",
+            body,
         ],
         capture_output=True,
         text=True,
@@ -159,6 +169,7 @@ def create_pull_request(repo: str, branch: str, title: str, body: str) -> str:
 # ---------------------------------------------------------------------------
 # Three-agent pipeline
 # ---------------------------------------------------------------------------
+
 
 async def run_issue_pipeline(
     issue: IssueWork,
@@ -177,9 +188,7 @@ async def run_issue_pipeline(
     quality_tmpl = (PROMPTS_DIR / "code-quality-reviewer.md").read_text()
 
     context = (
-        f"Repository: {work.repo}\n"
-        f"Epic: #{work.epic_number} — {work.epic_title}\n"
-        f"{work.epic_body}"
+        f"Repository: {work.repo}\nEpic: #{work.epic_number} — {work.epic_title}\n{work.epic_body}"
     )
 
     implementer_report = ""
@@ -226,7 +235,8 @@ async def run_issue_pipeline(
             else:
                 git_reset_hard(base_sha)
                 post_issue_comment(
-                    work.repo, issue.number,
+                    work.repo,
+                    issue.number,
                     f"<!-- shipyard-executor: SPEC_FAILED -->\n"
                     f"**Spec compliance review failed after {max_retries + 1} attempt(s)**\n\n"
                     f"<details><summary>Spec reviewer output</summary>\n\n{spec_output}\n\n</details>",
@@ -250,7 +260,8 @@ async def run_issue_pipeline(
             else:
                 git_reset_hard(base_sha)
                 post_issue_comment(
-                    work.repo, issue.number,
+                    work.repo,
+                    issue.number,
                     f"<!-- shipyard-executor: QUALITY_FAILED -->\n"
                     f"**Code quality review failed after {max_retries + 1} attempt(s)**\n\n"
                     f"<details><summary>Quality reviewer output</summary>\n\n{quality_output}\n\n</details>",
