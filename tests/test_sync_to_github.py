@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch
-from scripts.sync_to_github import (
+from shipyard.commands.sync import (
     gh,
     create_issue,
     add_blocked_by,
@@ -8,7 +8,7 @@ from scripts.sync_to_github import (
 )
 
 
-@patch("scripts.sync_to_github.subprocess")
+@patch("shipyard.commands.sync.subprocess")
 def test_gh_runs_command(mock_subprocess):
     mock_subprocess.run.return_value.returncode = 0
     mock_subprocess.run.return_value.stdout = "output\n"
@@ -17,7 +17,7 @@ def test_gh_runs_command(mock_subprocess):
     mock_subprocess.run.assert_called_once()
 
 
-@patch("scripts.sync_to_github.subprocess")
+@patch("shipyard.commands.sync.subprocess")
 def test_gh_raises_on_nonzero(mock_subprocess):
     mock_subprocess.run.return_value.returncode = 1
     mock_subprocess.run.return_value.stderr = "error msg"
@@ -26,9 +26,8 @@ def test_gh_raises_on_nonzero(mock_subprocess):
         gh(["issue", "create", "--title", "x"])
 
 
-@patch("scripts.sync_to_github.subprocess")
+@patch("shipyard.commands.sync.subprocess")
 def test_create_issue_parses_number_from_url(mock_subprocess):
-    # Second call for database id
     mock_subprocess.run.side_effect = [
         type("R", (), {"returncode": 0, "stdout": "https://github.com/owner/repo/issues/42\n", "stderr": ""})(),
         type("R", (), {"returncode": 0, "stdout": "123456\n", "stderr": ""})(),
@@ -39,19 +38,18 @@ def test_create_issue_parses_number_from_url(mock_subprocess):
     assert ref.url == "https://github.com/owner/repo/issues/42"
 
 
-@patch("scripts.sync_to_github.subprocess")
+@patch("shipyard.commands.sync.subprocess")
 def test_create_issue_dry_run_makes_no_subprocess_calls(mock_subprocess):
     ref = create_issue("owner/repo", "Title", "Body", dry_run=True)
     mock_subprocess.run.assert_not_called()
     assert ref.number == 0
 
 
-@patch("scripts.sync_to_github.subprocess")
+@patch("shipyard.commands.sync.subprocess")
 def test_add_blocked_by_404_is_soft_failure(mock_subprocess, capsys):
     mock_subprocess.run.return_value.returncode = 1
     mock_subprocess.run.return_value.stderr = "404 Not Found"
     mock_subprocess.run.return_value.stdout = ""
-    # Should not raise
     add_blocked_by("owner/repo", 5, 500, 3, 300, dry_run=False)
     captured = capsys.readouterr()
     assert "WARNING" in captured.out or "dependencies API" in captured.out
