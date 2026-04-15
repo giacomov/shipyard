@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 import pytest
-from scripts.plan_to_tasks import parse_plan, validate_plan, plan_to_tasks_dict
+from shipyard.commands.tasks import parse_plan, validate_plan, plan_to_tasks_dict
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
