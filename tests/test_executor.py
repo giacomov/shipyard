@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import AsyncMock, patch
-from scripts.executor import (
+from shipyard.commands.execute import (
     parse_implementer_status,
     parse_review_verdict,
     format_prompt,
@@ -57,17 +57,17 @@ def test_close_issues_body():
 
 
 @pytest.mark.asyncio
-@patch("scripts.executor.run_agent", new_callable=AsyncMock)
-@patch("scripts.executor.git_reset_hard")
-@patch("scripts.executor.post_issue_comment")
-@patch("scripts.executor.create_pull_request", return_value="https://github.com/o/r/pull/9")
+@patch("shipyard.commands.execute.run_agent", new_callable=AsyncMock)
+@patch("shipyard.commands.execute.git_reset_hard")
+@patch("shipyard.commands.execute.post_issue_comment")
+@patch("shipyard.commands.execute.create_pull_request", return_value="https://github.com/o/r/pull/9")
 async def test_pipeline_happy_path(mock_pr, mock_comment, mock_reset, mock_agent):
     mock_agent.side_effect = [
-        "Status: DONE\nFiles: foo.py",   # implementer
-        "APPROVED",                        # spec reviewer
-        "APPROVED",                        # code quality reviewer
+        "Status: DONE\nFiles: foo.py",
+        "APPROVED",
+        "APPROVED",
     ]
-    from scripts.executor import run_issue_pipeline
+    from shipyard.commands.execute import run_issue_pipeline
     issue = IssueWork(number=5, title="Do X", body="spec")
     work = WorkSpec(
         epic_number=10, epic_title="Epic", epic_body="",
@@ -76,16 +76,16 @@ async def test_pipeline_happy_path(mock_pr, mock_comment, mock_reset, mock_agent
     result = await run_issue_pipeline(issue, work, base_sha="start123")
     assert result is True
     mock_reset.assert_not_called()
-    mock_pr.assert_not_called()  # PR created outside pipeline
+    mock_pr.assert_not_called()
 
 
 @pytest.mark.asyncio
-@patch("scripts.executor.run_agent", new_callable=AsyncMock)
-@patch("scripts.executor.git_reset_hard")
-@patch("scripts.executor.post_issue_comment")
+@patch("shipyard.commands.execute.run_agent", new_callable=AsyncMock)
+@patch("shipyard.commands.execute.git_reset_hard")
+@patch("shipyard.commands.execute.post_issue_comment")
 async def test_pipeline_blocked_resets_and_comments(mock_comment, mock_reset, mock_agent):
     mock_agent.return_value = "BLOCKED\nCannot find module X"
-    from scripts.executor import run_issue_pipeline
+    from shipyard.commands.execute import run_issue_pipeline
     issue = IssueWork(number=5, title="Do X", body="spec")
     work = WorkSpec(
         epic_number=10, epic_title="Epic", epic_body="",
@@ -100,18 +100,18 @@ async def test_pipeline_blocked_resets_and_comments(mock_comment, mock_reset, mo
 
 
 @pytest.mark.asyncio
-@patch("scripts.executor.run_agent", new_callable=AsyncMock)
-@patch("scripts.executor.git_reset_hard")
-@patch("scripts.executor.post_issue_comment")
+@patch("shipyard.commands.execute.run_agent", new_callable=AsyncMock)
+@patch("shipyard.commands.execute.git_reset_hard")
+@patch("shipyard.commands.execute.post_issue_comment")
 async def test_pipeline_spec_failure_triggers_retry(mock_comment, mock_reset, mock_agent):
     mock_agent.side_effect = [
-        "Status: DONE\nFiles: foo.py",         # implementer attempt 1
-        "CHANGES_REQUESTED\nMissing test",      # spec reviewer
-        "Status: DONE\nFiles: foo.py",         # implementer attempt 2
-        "APPROVED",                             # spec reviewer
-        "APPROVED",                             # code quality reviewer
+        "Status: DONE\nFiles: foo.py",
+        "CHANGES_REQUESTED\nMissing test",
+        "Status: DONE\nFiles: foo.py",
+        "APPROVED",
+        "APPROVED",
     ]
-    from scripts.executor import run_issue_pipeline
+    from shipyard.commands.execute import run_issue_pipeline
     issue = IssueWork(number=5, title="Do X", body="spec")
     work = WorkSpec(
         epic_number=10, epic_title="Epic", epic_body="",
