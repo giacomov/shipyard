@@ -32,12 +32,11 @@ jobs:
       work_json: ${{ steps.find-work.outputs.work_json }}
 
     steps:
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v4
 
       - name: Install shipyard
-        run: pip install shipyard==SHIPYARD_VERSION
+        # SHIPYARD_VERSION is replaced by `shipyard init` with the version of shipyard used to generate this file
+        run: uv tool install "git+https://github.com/giacomov/shipyard@vSHIPYARD_VERSION"
 
       - name: Find epic and unblocked issues
         id: find-work
@@ -70,19 +69,11 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Install Claude Code CLI
-        run: npm install -g @anthropic-ai/claude-code
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v4
 
       - name: Install shipyard
-        run: pip install shipyard==SHIPYARD_VERSION
+        # SHIPYARD_VERSION is replaced by `shipyard init` with the version of shipyard used to generate this file
+        run: uv tool install "git+https://github.com/giacomov/shipyard@vSHIPYARD_VERSION"
 
       - name: Run executor
         env:
