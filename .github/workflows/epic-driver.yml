@@ -38,11 +38,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Install package (editable)
-        run: pip install -e .
+      - name: Install shipyard (editable)
+        run: pip install -e ".[dev]"
 
       - name: Find epic and unblocked issues
         id: find-work
@@ -52,7 +49,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number || '' }}
           PR_BODY: ${{ github.event.pull_request.body || '' }}
-        run: python scripts/find_epic_work.py
+        run: shipyard find-work
 
   execute:
     name: Execute tasks with Agent SDK
@@ -86,11 +83,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Install package (editable)
-        run: pip install -e .
+      - name: Install shipyard (editable)
+        run: pip install -e ".[dev]"
 
       - name: Run executor
         env:
@@ -98,4 +92,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           WORK_JSON: ${{ needs.find-work.outputs.work_json }}
           GITHUB_RUN_ID: ${{ github.run_id }}
-        run: python scripts/executor.py
+        run: shipyard execute
