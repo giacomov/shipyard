@@ -17,3 +17,16 @@ def test_required_files_exist():
     assert (root / "pyproject.toml").exists()
     assert (root / "requirements.txt").exists()
     assert (root / "tests" / "fixtures").is_dir()
+
+
+def test_cli_entry_point_lists_all_commands():
+    from shipyard.cli import main
+    from click.testing import CliRunner
+    runner = CliRunner()
+    result = runner.invoke(main, ["--help"])
+    assert result.exit_code == 0
+    assert "tasks" in result.output
+    assert "sync" in result.output
+    assert "init" in result.output
+    assert "find-work" in result.output
+    assert "execute" in result.output

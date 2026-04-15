@@ -30,4 +30,4 @@ where = ["."]
 include = ["shipyard*"]
 
 [tool.setuptools.package-data]
-shipyard = ["templates/*.yml", "prompts/*.md"]
+shipyard = ["templates/*.yml", "prompts/*.md", "py.typed"]
