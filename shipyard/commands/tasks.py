@@ -32,8 +32,8 @@ async def _run_task_agent(prompt: str, cwd: str) -> None:
         allowed_tools=["Read", "TaskCreate"],
         cwd=cwd,
     )
-    async for _ in query(prompt=prompt, options=options):
-        pass
+    async for response in query(prompt=prompt, options=options):
+        print(response)
 
 
 def _load_task_files(task_list_id: str) -> list[dict]:
