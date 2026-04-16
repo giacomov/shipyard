@@ -3,12 +3,13 @@
 
 import json
 import re
-import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 import click
+
+from shipyard.utils.gh import gh, resolve_repo
 
 
 @dataclass
@@ -16,39 +17,6 @@ class IssueRef:
     number: int
     url: str
     database_id: int
-
-
-def gh(args: list[str], dry_run: bool = False, dry_label: str = "") -> str:
-    """Run a gh CLI command and return trimmed stdout.
-
-    Raises RuntimeError on non-zero exit. In dry_run mode, prints the command.
-    """
-    if dry_run:
-        label = f"  # {dry_label}" if dry_label else ""
-        print(f"  [dry-run] gh {' '.join(args)}{label}")
-        return ""
-    result = subprocess.run(
-        ["gh"] + args,
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"gh command failed (exit {result.returncode}): gh {' '.join(args)}\n{result.stderr}"
-        )
-    return result.stdout.strip()
-
-
-def resolve_repo(repo_flag: str | None, dry_run: bool) -> str:
-    """Return 'owner/repo'. Uses gh repo view if repo_flag is None."""
-    if repo_flag:
-        return repo_flag
-    result = gh(
-        ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"], dry_run=dry_run
-    )
-    if not result:
-        return "<owner>/<repo>"
-    return result
 
 
 def create_issue(repo: str, title: str, body: str, dry_run: bool) -> IssueRef:

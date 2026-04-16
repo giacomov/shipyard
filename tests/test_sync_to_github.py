@@ -21,7 +21,7 @@ from shipyard.commands.sync import (
 # ---------------------------------------------------------------------------
 
 
-@patch("shipyard.commands.sync.subprocess")
+@patch("shipyard.utils.gh.subprocess")
 def test_gh_runs_command(mock_subprocess):
     mock_subprocess.run.return_value.returncode = 0
     mock_subprocess.run.return_value.stdout = "output\n"
@@ -30,7 +30,7 @@ def test_gh_runs_command(mock_subprocess):
     mock_subprocess.run.assert_called_once()
 
 
-@patch("shipyard.commands.sync.subprocess")
+@patch("shipyard.utils.gh.subprocess")
 def test_gh_raises_on_nonzero(mock_subprocess):
     mock_subprocess.run.return_value.returncode = 1
     mock_subprocess.run.return_value.stderr = "error msg"
@@ -62,13 +62,12 @@ def test_resolve_repo_uses_flag():
     assert resolve_repo("myorg/myrepo", dry_run=False) == "myorg/myrepo"
 
 
-@patch("shipyard.commands.sync.gh", return_value="owner/detected")
+@patch("shipyard.utils.gh.gh", return_value="owner/detected")
 def test_resolve_repo_auto_detects(mock_gh):
     assert resolve_repo(None, dry_run=False) == "owner/detected"
 
 
-@patch("shipyard.commands.sync.gh", return_value="")
-def test_resolve_repo_dry_run_placeholder(mock_gh):
+def test_resolve_repo_dry_run_placeholder():
     result = resolve_repo(None, dry_run=True)
     assert result == "<owner>/<repo>"
 
@@ -78,7 +77,7 @@ def test_resolve_repo_dry_run_placeholder(mock_gh):
 # ---------------------------------------------------------------------------
 
 
-@patch("shipyard.commands.sync.subprocess")
+@patch("shipyard.utils.gh.subprocess")
 def test_create_issue_parses_number_from_url(mock_subprocess):
     mock_subprocess.run.side_effect = [
         type(
@@ -94,14 +93,14 @@ def test_create_issue_parses_number_from_url(mock_subprocess):
     assert ref.url == "https://github.com/owner/repo/issues/42"
 
 
-@patch("shipyard.commands.sync.subprocess")
+@patch("shipyard.utils.gh.subprocess")
 def test_create_issue_dry_run_makes_no_subprocess_calls(mock_subprocess):
     ref = create_issue("owner/repo", "Title", "Body", dry_run=True)
     mock_subprocess.run.assert_not_called()
     assert ref.number == 0
 
 
-@patch("shipyard.commands.sync.subprocess")
+@patch("shipyard.utils.gh.subprocess")
 def test_create_issue_raises_on_bad_url(mock_subprocess):
     mock_subprocess.run.return_value.returncode = 0
     mock_subprocess.run.return_value.stdout = "not-a-url\n"
@@ -126,7 +125,7 @@ def test_add_sub_issue_dry_run_prints(capsys):
 # ---------------------------------------------------------------------------
 
 
-@patch("shipyard.commands.sync.subprocess")
+@patch("shipyard.utils.gh.subprocess")
 def test_add_blocked_by_404_is_soft_failure(mock_subprocess, capsys):
     mock_subprocess.run.return_value.returncode = 1
     mock_subprocess.run.return_value.stderr = "404 Not Found"
@@ -136,7 +135,7 @@ def test_add_blocked_by_404_is_soft_failure(mock_subprocess, capsys):
     assert "WARNING" in captured.out or "dependencies API" in captured.out
 
 
-@patch("shipyard.commands.sync.subprocess")
+@patch("shipyard.utils.gh.subprocess")
 def test_add_blocked_by_reraises_non_404(mock_subprocess):
     mock_subprocess.run.return_value.returncode = 1
     mock_subprocess.run.return_value.stderr = "500 Internal Server Error"

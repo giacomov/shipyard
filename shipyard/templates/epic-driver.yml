@@ -75,10 +75,25 @@ jobs:
         # SHIPYARD_VERSION is replaced by `shipyard init` with the version of shipyard used to generate this file
         run: uv tool install "git+https://github.com/giacomov/shipyard@vSHIPYARD_VERSION"
 
-      - name: Run executor
+      - name: Create implementation branch
+        env:
+          WORK_JSON: ${{ needs.find-work.outputs.work_json }}
+        run: |
+          EPIC=$(python3 -c "import json,os; print(json.loads(os.environ['WORK_JSON'])['epic_number'])")
+          BRANCH="shipyard/epic-${EPIC}-run-${{ github.run_id }}"
+          git checkout -b "$BRANCH"
+          echo "SHIPYARD_BRANCH=$BRANCH" >> "$GITHUB_ENV"
+
+      - name: Run agent pipeline
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           GH_TOKEN: ${{ github.token }}
           WORK_JSON: ${{ needs.find-work.outputs.work_json }}
-          GITHUB_RUN_ID: ${{ github.run_id }}
         run: shipyard execute
+
+      - name: Push branch and open pull request
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORK_JSON: ${{ needs.find-work.outputs.work_json }}
+        run: shipyard publish-execution --branch "$SHIPYARD_BRANCH"

@@ -141,30 +141,15 @@ Steps:
 
 **Location:** `plans/i<ISSUE_NUMBER>.md`
 
-**Structure:**
+The plan file is markdown with an HTML comment at the top linking back to the original issue:
+
 ```markdown
 <!-- Related to: #<ISSUE_NUMBER> https://github.com/<REPO>/issues/<ISSUE_NUMBER> -->
 
-# <Plan Title>
-
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans
-
-**Goal:** [One sentence]
-
-**Architecture:** [2-3 sentences]
-
-**Tech Stack:** [Key technologies]
-
----
-
-### Task 1: [Component Name]
-
-**Depends on:** (none)
-
-...
+[Agent-generated plan content in the agent's natural output format]
 ```
 
-The plan file follows the format specified in `prompts/planner.md`, with an HTML comment linking back to the original issue at the top.
+The agent uses its default output format without additional structural constraints.
 
 ---
 
@@ -175,7 +160,7 @@ The plan file follows the format specified in `prompts/planner.md`, with an HTML
 - Use the built-in Plan subagent from `claude_agent_sdk.query()`
 - No custom `planner-agent.md` prompt needed; the Plan subagent handles planning autonomously
 - Pass issue context (title + body + conversation) as the prompt
-- The agent outputs markdown that follows `prompts/planner.md` format
+- The agent outputs markdown in its natural format
 
 ### GitHub Interactions: `gh` CLI
 
@@ -244,7 +229,7 @@ Both workflows can coexist. A user may:
 
 ### Validation Tests
 - Validate plan-driver.yml YAML syntax
-- Validate plan markdown follows `prompts/planner.md` format
+- Validate plan markdown is valid markdown with issue reference comment
 - Test all Click command options
 
 ### Manual Testing

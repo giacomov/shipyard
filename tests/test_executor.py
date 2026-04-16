@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -6,11 +6,11 @@ from shipyard.commands.execute import (
     ImplementerStatus,
     IssueWork,
     WorkSpec,
-    close_issues_body,
     format_prompt,
     parse_implementer_status,
     parse_review_verdict,
 )
+from shipyard.utils.gh import close_issues_body
 
 
 def _work(**kwargs) -> WorkSpec:
@@ -127,9 +127,7 @@ def test_close_issues_body_single():
 
 @pytest.mark.asyncio
 @patch("shipyard.commands.execute.run_agent", new_callable=AsyncMock)
-@patch("shipyard.commands.execute.git_reset_hard")
-@patch("shipyard.commands.execute.post_issue_comment")
-async def test_pipeline_happy_path(mock_comment, mock_reset, mock_agent):
+async def test_pipeline_happy_path(mock_agent):
     mock_agent.side_effect = [
         "Status: DONE\nFiles: foo.py",
         "APPROVED",
@@ -137,11 +135,18 @@ async def test_pipeline_happy_path(mock_comment, mock_reset, mock_agent):
     ]
     from shipyard.commands.execute import run_issue_pipeline
 
-    issue = _issue()
-    result = await run_issue_pipeline(issue, _work(), base_sha="start123")
+    reset_fn = MagicMock()
+    comment_fn = MagicMock()
+    result = await run_issue_pipeline(
+        _issue(),
+        _work(),
+        base_sha="start123",
+        reset_fn=reset_fn,
+        comment_fn=comment_fn,
+    )
     assert result is True
-    mock_reset.assert_not_called()
-    mock_comment.assert_not_called()
+    reset_fn.assert_not_called()
+    comment_fn.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -151,31 +156,43 @@ async def test_pipeline_happy_path(mock_comment, mock_reset, mock_agent):
 
 @pytest.mark.asyncio
 @patch("shipyard.commands.execute.run_agent", new_callable=AsyncMock)
-@patch("shipyard.commands.execute.git_reset_hard")
-@patch("shipyard.commands.execute.post_issue_comment")
-async def test_pipeline_blocked_resets_and_comments(mock_comment, mock_reset, mock_agent):
+async def test_pipeline_blocked_resets_and_comments(mock_agent):
     mock_agent.return_value = "BLOCKED\nCannot find module X"
     from shipyard.commands.execute import run_issue_pipeline
 
-    result = await run_issue_pipeline(_issue(), _work(), base_sha="start123")
+    reset_fn = MagicMock()
+    comment_fn = MagicMock()
+    result = await run_issue_pipeline(
+        _issue(),
+        _work(),
+        base_sha="start123",
+        reset_fn=reset_fn,
+        comment_fn=comment_fn,
+    )
     assert result is False
-    mock_reset.assert_called_once_with("start123")
-    comment_body = mock_comment.call_args[0][2]
+    reset_fn.assert_called_once_with("start123")
+    comment_body = comment_fn.call_args[0][2]
     assert "BLOCKED" in comment_body
 
 
 @pytest.mark.asyncio
 @patch("shipyard.commands.execute.run_agent", new_callable=AsyncMock)
-@patch("shipyard.commands.execute.git_reset_hard")
-@patch("shipyard.commands.execute.post_issue_comment")
-async def test_pipeline_needs_context_resets_and_comments(mock_comment, mock_reset, mock_agent):
+async def test_pipeline_needs_context_resets_and_comments(mock_agent):
     mock_agent.return_value = "NEEDS_CONTEXT: missing branch info"
     from shipyard.commands.execute import run_issue_pipeline
 
-    result = await run_issue_pipeline(_issue(), _work(), base_sha="sha0")
+    reset_fn = MagicMock()
+    comment_fn = MagicMock()
+    result = await run_issue_pipeline(
+        _issue(),
+        _work(),
+        base_sha="sha0",
+        reset_fn=reset_fn,
+        comment_fn=comment_fn,
+    )
     assert result is False
-    mock_reset.assert_called_once_with("sha0")
-    comment_body = mock_comment.call_args[0][2]
+    reset_fn.assert_called_once_with("sha0")
+    comment_body = comment_fn.call_args[0][2]
     assert "NEEDS_CONTEXT" in comment_body
 
 
@@ -186,9 +203,7 @@ async def test_pipeline_needs_context_resets_and_comments(mock_comment, mock_res
 
 @pytest.mark.asyncio
 @patch("shipyard.commands.execute.run_agent", new_callable=AsyncMock)
-@patch("shipyard.commands.execute.git_reset_hard")
-@patch("shipyard.commands.execute.post_issue_comment")
-async def test_pipeline_spec_failure_triggers_retry(mock_comment, mock_reset, mock_agent):
+async def test_pipeline_spec_failure_triggers_retry(mock_agent):
     mock_agent.side_effect = [
         "Status: DONE\nFiles: foo.py",  # implementer attempt 1
         "CHANGES_REQUESTED\nMissing test",  # spec reviewer attempt 1
@@ -198,19 +213,25 @@ async def test_pipeline_spec_failure_triggers_retry(mock_comment, mock_reset, mo
     ]
     from shipyard.commands.execute import run_issue_pipeline
 
-    result = await run_issue_pipeline(_issue(), _work(), base_sha="start123")
+    reset_fn = MagicMock()
+    comment_fn = MagicMock()
+    result = await run_issue_pipeline(
+        _issue(),
+        _work(),
+        base_sha="start123",
+        reset_fn=reset_fn,
+        comment_fn=comment_fn,
+    )
     assert result is True
     assert mock_agent.call_count == 5
     # Reset once between attempts
-    mock_reset.assert_called_once_with("start123")
-    mock_comment.assert_not_called()
+    reset_fn.assert_called_once_with("start123")
+    comment_fn.assert_not_called()
 
 
 @pytest.mark.asyncio
 @patch("shipyard.commands.execute.run_agent", new_callable=AsyncMock)
-@patch("shipyard.commands.execute.git_reset_hard")
-@patch("shipyard.commands.execute.post_issue_comment")
-async def test_pipeline_spec_terminal_failure_comments(mock_comment, mock_reset, mock_agent):
+async def test_pipeline_spec_terminal_failure_comments(mock_agent):
     # Both attempts fail spec review — max_retries=1 means 2 total attempts
     mock_agent.side_effect = [
         "DONE",
@@ -220,10 +241,19 @@ async def test_pipeline_spec_terminal_failure_comments(mock_comment, mock_reset,
     ]
     from shipyard.commands.execute import run_issue_pipeline
 
-    result = await run_issue_pipeline(_issue(), _work(), base_sha="sha0", max_retries=1)
+    reset_fn = MagicMock()
+    comment_fn = MagicMock()
+    result = await run_issue_pipeline(
+        _issue(),
+        _work(),
+        base_sha="sha0",
+        max_retries=1,
+        reset_fn=reset_fn,
+        comment_fn=comment_fn,
+    )
     assert result is False
-    mock_comment.assert_called_once()
-    comment_body = mock_comment.call_args[0][2]
+    comment_fn.assert_called_once()
+    comment_body = comment_fn.call_args[0][2]
     assert "SPEC_FAILED" in comment_body
 
 
@@ -234,9 +264,7 @@ async def test_pipeline_spec_terminal_failure_comments(mock_comment, mock_reset,
 
 @pytest.mark.asyncio
 @patch("shipyard.commands.execute.run_agent", new_callable=AsyncMock)
-@patch("shipyard.commands.execute.git_reset_hard")
-@patch("shipyard.commands.execute.post_issue_comment")
-async def test_pipeline_quality_failure_triggers_retry(mock_comment, mock_reset, mock_agent):
+async def test_pipeline_quality_failure_triggers_retry(mock_agent):
     mock_agent.side_effect = [
         "DONE",  # implementer 1
         "APPROVED",  # spec 1
@@ -247,17 +275,24 @@ async def test_pipeline_quality_failure_triggers_retry(mock_comment, mock_reset,
     ]
     from shipyard.commands.execute import run_issue_pipeline
 
-    result = await run_issue_pipeline(_issue(), _work(), base_sha="sha0", max_retries=1)
+    reset_fn = MagicMock()
+    comment_fn = MagicMock()
+    result = await run_issue_pipeline(
+        _issue(),
+        _work(),
+        base_sha="sha0",
+        max_retries=1,
+        reset_fn=reset_fn,
+        comment_fn=comment_fn,
+    )
     assert result is True
     assert mock_agent.call_count == 6
-    mock_comment.assert_not_called()
+    comment_fn.assert_not_called()
 
 
 @pytest.mark.asyncio
 @patch("shipyard.commands.execute.run_agent", new_callable=AsyncMock)
-@patch("shipyard.commands.execute.git_reset_hard")
-@patch("shipyard.commands.execute.post_issue_comment")
-async def test_pipeline_quality_terminal_failure_comments(mock_comment, mock_reset, mock_agent):
+async def test_pipeline_quality_terminal_failure_comments(mock_agent):
     mock_agent.side_effect = [
         "DONE",
         "APPROVED",
@@ -268,10 +303,19 @@ async def test_pipeline_quality_terminal_failure_comments(mock_comment, mock_res
     ]
     from shipyard.commands.execute import run_issue_pipeline
 
-    result = await run_issue_pipeline(_issue(), _work(), base_sha="sha0", max_retries=1)
+    reset_fn = MagicMock()
+    comment_fn = MagicMock()
+    result = await run_issue_pipeline(
+        _issue(),
+        _work(),
+        base_sha="sha0",
+        max_retries=1,
+        reset_fn=reset_fn,
+        comment_fn=comment_fn,
+    )
     assert result is False
-    mock_comment.assert_called_once()
-    comment_body = mock_comment.call_args[0][2]
+    comment_fn.assert_called_once()
+    comment_body = comment_fn.call_args[0][2]
     assert "QUALITY_FAILED" in comment_body
 
 
@@ -282,7 +326,7 @@ async def test_pipeline_quality_terminal_failure_comments(mock_comment, mock_res
 
 @pytest.mark.asyncio
 @patch("shipyard.commands.execute.run_issue_pipeline", new_callable=AsyncMock)
-@patch("shipyard.commands.execute.git_head_sha", return_value="abc")
+@patch("shipyard.commands.execute.get_head_sha", return_value="abc")
 async def test_run_all_issues_returns_results_dict(mock_sha, mock_pipeline):
     mock_pipeline.side_effect = [True, False]
     from shipyard.commands.execute import run_all_issues
@@ -295,7 +339,7 @@ async def test_run_all_issues_returns_results_dict(mock_sha, mock_pipeline):
 
 @pytest.mark.asyncio
 @patch("shipyard.commands.execute.run_issue_pipeline", new_callable=AsyncMock, return_value=True)
-@patch("shipyard.commands.execute.git_head_sha", return_value="abc")
+@patch("shipyard.commands.execute.get_head_sha", return_value="abc")
 async def test_run_all_issues_all_success(mock_sha, mock_pipeline):
     from shipyard.commands.execute import run_all_issues
 

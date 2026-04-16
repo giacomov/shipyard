@@ -47,14 +47,14 @@ def test_parse_closing_references_fixes_plural():
 # ---------------------------------------------------------------------------
 
 
-@patch("shipyard.commands.find_work.subprocess.run")
+@patch("shipyard.utils.gh.subprocess.run")
 def test_gh_returns_trimmed_stdout(mock_run):
     mock_run.return_value.returncode = 0
     mock_run.return_value.stdout = "  hello world  \n"
     assert gh(["issue", "list"]) == "hello world"
 
 
-@patch("shipyard.commands.find_work.subprocess.run")
+@patch("shipyard.utils.gh.subprocess.run")
 def test_gh_raises_on_nonzero(mock_run):
     mock_run.return_value.returncode = 1
     mock_run.return_value.stderr = "something went wrong"

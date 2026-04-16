@@ -1,0 +1,58 @@
+#!/usr/bin/env python3
+"""Shared git subprocess wrappers used across command modules."""
+
+import subprocess
+
+
+def git(args: list[str]) -> str:
+    """Run a git command and return trimmed stdout. Raises RuntimeError on non-zero exit."""
+    result = subprocess.run(["git"] + args, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"git command failed (exit {result.returncode}): git {' '.join(args)}\n{result.stderr}"
+        )
+    return result.stdout.strip()
+
+
+def checkout_new_branch(branch: str) -> None:
+    """Create and check out a new branch."""
+    git(["checkout", "-b", branch])
+
+
+def checkout_branch(branch: str) -> None:
+    """Check out an existing branch."""
+    git(["checkout", branch])
+
+
+def fetch(remote: str = "origin") -> None:
+    """Fetch from a remote."""
+    git(["fetch", remote])
+
+
+def add(paths: list[str]) -> None:
+    """Stage files for commit."""
+    git(["add"] + paths)
+
+
+def commit(message: str) -> None:
+    """Create a commit with the given message."""
+    git(["commit", "-m", message])
+
+
+def push(branch: str, remote: str = "origin", set_upstream: bool = False) -> None:
+    """Push a branch to a remote."""
+    args = ["push"]
+    if set_upstream:
+        args.append("-u")
+    args += [remote, branch]
+    git(args)
+
+
+def reset_hard(ref: str) -> None:
+    """Reset HEAD to ref, discarding all changes."""
+    git(["reset", "--hard", ref])
+
+
+def get_head_sha() -> str:
+    """Return the current HEAD commit SHA."""
+    return git(["rev-parse", "HEAD"])

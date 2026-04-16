@@ -5,14 +5,16 @@ import asyncio
 import json
 import os
 import re
-import subprocess
-import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
 import click
 from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, TextBlock, query
+
+from shipyard.utils.gh import post_issue_comment
+from shipyard.utils.git import get_head_sha, reset_hard
 
 PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
@@ -75,13 +77,6 @@ def format_prompt(template: str, **kwargs: str) -> str:
     return template
 
 
-def close_issues_body(issue_numbers: list[int]) -> str:
-    """Generate 'Closes #N' lines for a PR body."""
-    lines = ["This PR implements the following issues:\n"]
-    lines.extend(f"Closes #{n}" for n in issue_numbers)
-    return "\n".join(lines)
-
-
 # ---------------------------------------------------------------------------
 # Agent SDK
 # ---------------------------------------------------------------------------
@@ -108,65 +103,6 @@ def make_agent_options(cwd: str) -> ClaudeAgentOptions:
 
 
 # ---------------------------------------------------------------------------
-# Git helpers
-# ---------------------------------------------------------------------------
-
-
-def git_head_sha() -> str:
-    return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-
-
-def git_reset_hard(sha: str) -> None:
-    subprocess.run(["git", "reset", "--hard", sha], check=True)
-
-
-def git_create_and_checkout_branch(branch: str) -> None:
-    subprocess.run(["git", "checkout", "-b", branch], check=True)
-
-
-def git_push_branch(branch: str) -> None:
-    subprocess.run(["git", "push", "-u", "origin", branch], check=True)
-
-
-# ---------------------------------------------------------------------------
-# GitHub helpers
-# ---------------------------------------------------------------------------
-
-
-def post_issue_comment(repo: str, issue_number: int, body: str) -> None:
-    """Post a comment on the GitHub issue."""
-    subprocess.run(
-        ["gh", "issue", "comment", str(issue_number), "--repo", repo, "--body", body],
-        check=True,
-    )
-
-
-def create_pull_request(repo: str, branch: str, title: str, body: str) -> str:
-    """Create PR and return its URL."""
-    result = subprocess.run(
-        [
-            "gh",
-            "pr",
-            "create",
-            "--repo",
-            repo,
-            "--base",
-            "main",
-            "--head",
-            branch,
-            "--title",
-            title,
-            "--body",
-            body,
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return result.stdout.strip()
-
-
-# ---------------------------------------------------------------------------
 # Three-agent pipeline
 # ---------------------------------------------------------------------------
 
@@ -176,6 +112,9 @@ async def run_issue_pipeline(
     work: WorkSpec,
     base_sha: str,
     max_retries: int = 1,
+    *,
+    reset_fn: Callable[[str], None] = lambda _: None,
+    comment_fn: Callable[[str, int, str], None] = lambda *_: None,
 ) -> bool:
     """Run implementer + spec reviewer + quality reviewer for one issue.
 
@@ -206,8 +145,8 @@ async def run_issue_pipeline(
         status = parse_implementer_status(implementer_report)
 
         if status in (ImplementerStatus.BLOCKED, ImplementerStatus.NEEDS_CONTEXT):
-            git_reset_hard(base_sha)
-            post_issue_comment(
+            reset_fn(base_sha)
+            comment_fn(
                 work.repo,
                 issue.number,
                 f"<!-- shipyard-executor: {status.value} -->\n"
@@ -230,11 +169,11 @@ async def run_issue_pipeline(
             if attempt < max_retries:
                 # Will retry implementer with spec feedback appended
                 implementer_report = f"Spec review feedback:\n{spec_output}"
-                git_reset_hard(base_sha)
+                reset_fn(base_sha)
                 continue
             else:
-                git_reset_hard(base_sha)
-                post_issue_comment(
+                reset_fn(base_sha)
+                comment_fn(
                     work.repo,
                     issue.number,
                     f"<!-- shipyard-executor: SPEC_FAILED -->\n"
@@ -255,11 +194,11 @@ async def run_issue_pipeline(
         if not quality_approved:
             if attempt < max_retries:
                 implementer_report = f"Code quality review feedback:\n{quality_output}"
-                git_reset_hard(base_sha)
+                reset_fn(base_sha)
                 continue
             else:
-                git_reset_hard(base_sha)
-                post_issue_comment(
+                reset_fn(base_sha)
+                comment_fn(
                     work.repo,
                     issue.number,
                     f"<!-- shipyard-executor: QUALITY_FAILED -->\n"
@@ -274,13 +213,24 @@ async def run_issue_pipeline(
     assert False, "unreachable: all loop iterations terminate via return"
 
 
-async def run_all_issues(work: WorkSpec) -> dict[int, bool]:
+async def run_all_issues(
+    work: WorkSpec,
+    *,
+    reset_fn: Callable[[str], None] = lambda _: None,
+    comment_fn: Callable[[str, int, str], None] = lambda *_: None,
+) -> dict[int, bool]:
     """Run all issues sequentially. Returns {issue_number: success}."""
     results: dict[int, bool] = {}
     for issue in work.issues:
         print(f"\n── Implementing issue #{issue.number}: {issue.title}")
-        base_sha = git_head_sha()
-        success = await run_issue_pipeline(issue, work, base_sha=base_sha)
+        base_sha = get_head_sha()
+        success = await run_issue_pipeline(
+            issue,
+            work,
+            base_sha,
+            reset_fn=reset_fn,
+            comment_fn=comment_fn,
+        )
         results[issue.number] = success
         if success:
             print(f"   ✓ Issue #{issue.number} implemented and approved")
@@ -305,27 +255,27 @@ def execute() -> None:
         issues=[IssueWork(**i) for i in data["issues"]],
     )
 
-    run_id = os.environ.get("GITHUB_RUN_ID") or str(int(time.time()))
-    branch = f"shipyard/epic-{work.epic_number}-run-{run_id}"
-    git_create_and_checkout_branch(branch)
-    print(f"Branch: {branch}")
-
-    results = asyncio.run(run_all_issues(work))
+    results = asyncio.run(
+        run_all_issues(
+            work,
+            reset_fn=reset_hard,
+            comment_fn=post_issue_comment,
+        )
+    )
 
     successful = [n for n, ok in results.items() if ok]
     failed = [n for n, ok in results.items() if not ok]
 
     print(f"\n── Results: {len(successful)} succeeded, {len(failed)} failed")
 
-    if not successful:
-        print("No issues implemented — skipping PR creation.")
-        raise SystemExit(1)
-
-    git_push_branch(branch)
-    pr_title = f"shipyard: implement {len(successful)} issue(s) from epic #{work.epic_number}"
-    pr_body = close_issues_body(successful)
-    pr_url = create_pull_request(work.repo, branch, pr_title, pr_body)
-    print(f"\nPR created: {pr_url}")
+    Path("shipyard-results.json").write_text(
+        json.dumps(
+            {
+                "successful": successful,
+                "failed": failed,
+            }
+        )
+    )
 
     if failed:
         print(f"WARNING: {len(failed)} issue(s) failed: {failed}")

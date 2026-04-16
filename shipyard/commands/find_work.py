@@ -3,18 +3,11 @@
 
 import json
 import os
-import re
-import subprocess
 
 import click
 
-
-def gh(args: list[str]) -> str:
-    """Run gh CLI and return trimmed stdout. Raises RuntimeError on error."""
-    result = subprocess.run(["gh"] + args, capture_output=True, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(f"gh {' '.join(args)}: {result.stderr.strip()}")
-    return result.stdout.strip()
+from shipyard.utils.gh import gh, parse_closing_references
+from shipyard.utils.gh import set_github_output as set_output
 
 
 def gh_get(path: str) -> dict | list:
@@ -29,23 +22,6 @@ def gh_graphql(query: str, variables: dict[str, str | int]) -> dict:
     if result.get("errors"):
         raise RuntimeError("; ".join(e["message"] for e in result["errors"]))
     return result["data"]
-
-
-def set_output(key: str, value: str) -> None:
-    """Write key=value to $GITHUB_OUTPUT, or print locally."""
-    output_file = os.environ.get("GITHUB_OUTPUT")
-    if output_file:
-        delimiter = f"EOF_{key.upper()}"
-        with open(output_file, "a") as f:
-            f.write(f"{key}<<{delimiter}\n{value}\n{delimiter}\n")
-    else:
-        print(f"\n[output] {key}=\n{value}")
-
-
-def parse_closing_references(pr_body: str) -> list[int]:
-    """Extract issue numbers from 'closes/fixes/resolves #N' patterns."""
-    pattern = re.compile(r"(?:closes?|fixes?|resolves?)\s+#(\d+)", re.IGNORECASE)
-    return [int(m.group(1)) for m in pattern.finditer(pr_body)]
 
 
 def resolve_epic_number(
