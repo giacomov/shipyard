@@ -8,7 +8,7 @@ import uuid
 from pathlib import Path
 
 import click
-from claude_agent_sdk import ClaudeAgentOptions, ProcessError, query
+from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, ProcessError, query
 
 _TASK_AGENT_PROMPT = """\
 Read the implementation plan at {plan_path} and create tasks with dependencies for it \
@@ -33,7 +33,10 @@ async def _run_task_agent(prompt: str, cwd: str) -> None:
         cwd=cwd,
     )
     async for response in query(prompt=prompt, options=options):
-        print(response)
+        match response:
+            case AssistantMessage():
+                if response.error is not None:
+                    raise RuntimeError(f"Agent error: {response.error}")
 
 
 def _load_task_files(task_list_id: str) -> list[dict]:
