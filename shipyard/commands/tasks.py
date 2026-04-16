@@ -4,6 +4,7 @@
 import asyncio
 import json
 import os
+import sys
 import uuid
 from pathlib import Path
 
@@ -31,6 +32,7 @@ async def _run_task_agent(prompt: str, cwd: str) -> None:
         permission_mode="bypassPermissions",
         allowed_tools=["Read", "TaskCreate"],
         cwd=cwd,
+        stderr=lambda line: print(line, file=sys.stderr, flush=True),
     )
     async for _ in query(prompt=prompt, options=options):
         pass

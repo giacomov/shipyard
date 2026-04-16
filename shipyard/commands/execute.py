@@ -5,6 +5,7 @@ import asyncio
 import json
 import os
 import re
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
@@ -99,6 +100,7 @@ def make_agent_options(cwd: str) -> ClaudeAgentOptions:
         permission_mode="bypassPermissions",
         allowed_tools=["Bash", "Read", "Write", "Edit", "Glob", "Grep"],
         cwd=cwd,
+        stderr=lambda line: print(line, file=sys.stderr, flush=True),
     )
 
 
