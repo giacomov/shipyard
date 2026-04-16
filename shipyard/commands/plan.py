@@ -53,6 +53,7 @@ async def run_plan_agent(prompt: str, cwd: str) -> str:
     options = ClaudeAgentOptions(
         permission_mode="bypassPermissions",
         allowed_tools=["Read", "Glob", "Grep"],
+        system_prompt={"type": "preset", "preset": "claude_code"},
         cwd=cwd,
     )
     output_parts: list[str] = []

@@ -32,6 +32,7 @@ async def _run_task_agent(prompt: str, cwd: str) -> None:
     options = ClaudeAgentOptions(
         permission_mode="bypassPermissions",
         allowed_tools=["Read", "TaskCreate"],
+        system_prompt={"type": "preset", "preset": "claude_code"},
         cwd=cwd,
     )
     async for message in query(prompt=prompt, options=options):

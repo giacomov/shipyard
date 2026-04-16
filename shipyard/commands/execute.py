@@ -102,6 +102,7 @@ def make_agent_options(cwd: str) -> ClaudeAgentOptions:
     return ClaudeAgentOptions(
         permission_mode="bypassPermissions",
         allowed_tools=["Bash", "Read", "Write", "Edit", "Glob", "Grep"],
+        system_prompt={"type": "preset", "preset": "claude_code"},
         cwd=cwd,
     )
 
