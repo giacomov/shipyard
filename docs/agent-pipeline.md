@@ -5,10 +5,11 @@
 ## What `shipyard execute` Does
 
 1. Reads `$WORK_JSON` (produced by `shipyard find-work`) and deserializes it into a `WorkSpec`.
-2. Creates a feature branch: `shipyard/epic-<epic_number>-run-<GITHUB_RUN_ID>`.
-3. Iterates over each issue **sequentially** (one at a time).
-4. For each issue, records the current `HEAD` SHA as `base_sha`, then runs the three-agent pipeline.
-5. After all issues are processed, pushes the branch and creates a single PR that closes all successfully-implemented issues.
+2. Iterates over each issue **sequentially** (one at a time).
+3. For each issue, records the current `HEAD` SHA as `base_sha`, then runs the three-agent pipeline.
+4. Writes `shipyard-results.json` with `{ "successful": [...], "failed": [...] }` issue number lists.
+
+Branch creation, push, and PR opening are handled separately by `shipyard publish-execution` (the next step in the workflow), which reads `shipyard-results.json`.
 
 ## The Three-Agent Sequence
 
@@ -100,19 +101,21 @@ When an issue fails (any terminal condition):
    - A collapsible `<details>` section containing the relevant agent output.
 3. Execution continues with the next issue.
 
-The overall `shipyard execute` process exits with code 1 if any issues failed, but still creates a PR for whatever succeeded.
+The overall `shipyard execute` process exits with code 1 if any issues failed.
 
 ## Success Handling
 
 When both reviews approve an issue:
 
 - The commits are left on the branch (no special action needed).
-- The issue number is added to the `successful` list.
+- The issue number is added to the `successful` list in `shipyard-results.json`.
 
-After all issues are processed:
+After all issues are processed, `shipyard publish-execution` (the next workflow step) reads `shipyard-results.json` and:
 
 1. `git push -u origin <branch>` pushes all accumulated commits.
 2. `gh pr create` opens a PR with:
    - Title: `shipyard: implement N issue(s) from epic #<epic_number>`
    - Body: an intro line ("This PR implements the following issues:") followed by `Closes #<n>` lines for every successful issue number.
    - Base branch: `main` (hardcoded — repos with a different default branch must update the workflow).
+
+If no issues succeeded, `shipyard publish-execution` skips push and PR creation entirely.

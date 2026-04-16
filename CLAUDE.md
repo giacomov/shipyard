@@ -9,11 +9,11 @@ Detailed documentation lives in `docs/`. Before making changes, read the relevan
 | Doc | Covers |
 |-----|--------|
 | `docs/ARCHITECTURE.md` | Component diagram, data flow, package layout |
-| `docs/cli.md` | All five CLI commands with flags and examples |
+| `docs/cli.md` | All seven CLI commands with flags and examples |
 | `docs/agent-pipeline.md` | Three-agent pipeline, retry logic, failure handling |
 | `docs/task-format.md` | Markdown plan syntax, JSON schemas |
 | `docs/github-integration.md` | Issues, sub-issues, blocked-by, labels, permissions |
-| `docs/workflow.md` | `epic-driver.yml` jobs, secrets, data flow between jobs |
+| `docs/workflow.md` | `epic-driver.yml` and `plan-driver.yml` jobs, secrets, data flow |
 | `docs/agent-prompts.md` | Prompt files, placeholder substitution, customization |
 
 ## Commands
@@ -76,21 +76,29 @@ Shipyard is a CLI tool + bundled GitHub Actions workflow that turns a markdown i
 
 **CI phase (GitHub Actions, triggered by label/PR/dispatch):**
 1. `find-work` job: `shipyard find-work` reads event context from env vars, resolves the active epic, fetches open sub-issues, filters to those with no open blockers, and writes a `work_json` payload to `$GITHUB_OUTPUT`.
-2. `execute` job: `shipyard execute` reads `$WORK_JSON`, creates a feature branch, and runs a **three-agent pipeline** (implementer → spec reviewer → code quality reviewer) for each unblocked issue sequentially. On success it pushes the branch and opens a PR against `main`.
+2. `execute` job (three steps):
+   - Creates the feature branch (`shipyard/epic-<N>-run-<RUN_ID>`).
+   - `shipyard execute` reads `$WORK_JSON` and runs a **three-agent pipeline** (implementer → spec reviewer → code quality reviewer) for each unblocked issue sequentially. Writes `shipyard-results.json`.
+   - `shipyard publish-execution` pushes the branch and opens a PR against `main` (runs with `if: always()` so partial results are always published).
 
 ### Package layout
 
 ```
 shipyard/
-  cli.py               # Click group wiring all five commands
+  cli.py               # Click group wiring all commands
   commands/
-    init.py            # copies bundled epic-driver.yml template into .github/workflows/
+    init.py            # copies bundled workflow templates into .github/workflows/
     tasks.py           # markdown → ParsedPlan → tasks.json (pure parsing, no I/O side effects)
     sync.py            # tasks.json → GitHub Issues via gh CLI subprocess calls
     find_work.py       # epic resolution + unblocked sub-issue lookup; writes $GITHUB_OUTPUT
-    execute.py         # async three-agent pipeline using claude-agent-sdk
+    execute.py         # async three-agent pipeline; writes shipyard-results.json
+    plan.py            # planning agent runner; writes plans/i<N>.md
+    publish.py         # push branch + open PR; reads shipyard-results.json
   prompts/             # plain-text prompt templates with {PLACEHOLDER} tokens
-  templates/           # epic-driver.yml with SHIPYARD_VERSION placeholder
+  templates/           # epic-driver.yml and plan-driver.yml with SHIPYARD_VERSION placeholder
+  utils/
+    git.py             # git subprocess wrappers
+    gh.py              # gh CLI wrappers + GitHub output helpers
 ```
 
 ### Agent pipeline (`execute.py`)
@@ -100,6 +108,7 @@ shipyard/
 - On review failure with retries remaining: `git reset --hard base_sha` and re-run implementer with the reviewer feedback injected into `{CONTEXT}`.
 - On terminal failure: reset, post a GitHub Issue comment with `<!-- shipyard-executor: REASON -->` tag, continue to next issue.
 - `max_retries=1` → up to 2 total attempts per issue.
+- `reset_fn` and `comment_fn` are injectable callbacks (default to no-ops), making the pipeline testable without live git/GH state.
 
 ### GitHub data model
 
@@ -107,7 +116,7 @@ GitHub Issues are the only persistent store — no database. The epic issue is t
 
 ### Key design constraints
 
-- `find_work.py` and `execute.py` are CI-only (driven entirely by env vars, no Click options).
+- `find_work.py`, `execute.py`, `plan.py`, and `publish.py` are CI-only (driven entirely by env vars, no interactive options).
 - All GitHub API calls in `sync.py` and `find_work.py` go through the `gh` CLI as subprocesses.
-- The bundled `epic-driver.yml` template uses `SHIPYARD_VERSION` as a placeholder; `shipyard init` substitutes it with `importlib.metadata.version("shipyard")`.
-- PRs are always opened against `main` (hardcoded in `execute.py:create_pull_request`).
+- The bundled workflow templates use `SHIPYARD_VERSION` as a placeholder; `shipyard init` substitutes it with the package version (or `main` when `--from-main` is passed).
+- PRs are always opened against `main` (hardcoded in `utils/gh.py:create_pull_request`).

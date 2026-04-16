@@ -45,9 +45,11 @@ jobs:
       - name: Checkout plan branch
         run: |
           ISSUE="${{ steps.extract-event.outputs.issue_number }}"
+          git fetch origin
           if [ "${{ steps.extract-event.outputs.has_review }}" == "true" ]; then
-            git fetch origin
             git checkout "plan/i${ISSUE}"
+          elif git ls-remote --exit-code origin "plan/i${ISSUE}" > /dev/null 2>&1; then
+            git checkout -b "plan/i${ISSUE}" "origin/plan/i${ISSUE}"
           else
             git checkout -b "plan/i${ISSUE}"
           fi
@@ -84,9 +86,11 @@ jobs:
           else
             git commit -m "docs: add implementation plan for issue #${ISSUE}"
             git push -u origin "$BRANCH"
-            gh pr create --draft \
-              --base main --head "$BRANCH" \
-              --title "Plan: ${TITLE}" \
-              --body "Closes #${ISSUE}" \
-              --repo "${{ github.repository }}"
+            if ! gh pr view "$BRANCH" --repo "${{ github.repository }}" > /dev/null 2>&1; then
+              gh pr create --draft \
+                --base main --head "$BRANCH" \
+                --title "Plan: ${TITLE}" \
+                --body "Closes #${ISSUE}" \
+                --repo "${{ github.repository }}"
+            fi
           fi

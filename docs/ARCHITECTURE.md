@@ -31,13 +31,14 @@
 │    shipyard find-work ──► work_json output                      │
 │                                      │                          │
 │  execute job (if has_work == true)   │                          │
-│    shipyard execute ◄────────────────┘                          │
-│       │                                                         │
-│       ├── Implementer agent                                     │
-│       ├── Spec Reviewer agent                                   │
-│       └── Code Quality Reviewer agent                           │
-│                │                                                │
-│                └──► git push + gh pr create                     │
+│    1. git checkout -b <branch>       │                          │
+│    2. shipyard execute ◄─────────────┘                          │
+│       │   Implementer agent                                     │
+│       │   Spec Reviewer agent                                   │
+│       │   Code Quality Reviewer agent                           │
+│       └──► shipyard-results.json                                │
+│    3. shipyard publish-execution                                 │
+│           └──► git push + gh pr create                          │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -53,13 +54,13 @@ GitHub Issues serve as the persistent task board. The epic issue is the root nod
 
 ### 3. CI Execution (GitHub Actions)
 
-Every trigger event (label added, PR merged, manual dispatch) runs `find-work` to resolve the current epic and discover unblocked sub-issues, then passes a JSON payload to `execute` which runs the agent pipeline for each issue.
+Every trigger event (label added, PR merged, manual dispatch) runs `find-work` to resolve the current epic and discover unblocked sub-issues, then passes a JSON payload to the `execute` job. That job runs in three steps: create the branch, run the agent pipeline (`shipyard execute`), and publish the results (`shipyard publish-execution`).
 
 ## Main Tools
 
 | Tool | Role |
 |------|------|
-| [Click](https://click.palletsprojects.com/) | CLI framework for all five commands |
+| [Click](https://click.palletsprojects.com/) | CLI framework for all commands |
 | `claude-agent-sdk` | Async agent execution via `query()` |
 | `gh` CLI | All GitHub API calls (issues, sub-issues, PRs, labels) |
 | GitHub Actions | Workflow orchestration, event routing |
@@ -83,7 +84,11 @@ work_json  { epic_number, epic_title, epic_body, repo, issues[{number, title, bo
     │
     │  shipyard execute  (claude-agent-sdk)
     ▼
-agent pipeline  ──►  git branch + commits + PR
+shipyard-results.json  { successful: [...], failed: [...] }
+    │
+    │  shipyard publish-execution
+    ▼
+git branch + commits + PR
 ```
 
 ## Package Layout
@@ -94,11 +99,13 @@ shipyard/
   cli.py               # Click group wiring all commands
   commands/
     __init__.py
-    init.py            # shipyard init — copies epic-driver.yml template
+    init.py            # shipyard init — copies workflow templates
     tasks.py           # shipyard tasks — markdown → JSON parser
     sync.py            # shipyard sync — JSON → GitHub Issues
     find_work.py       # shipyard find-work — epic resolution + unblocked lookup
-    execute.py         # shipyard execute — three-agent pipeline runner
+    execute.py         # shipyard execute — three-agent pipeline runner (CI only)
+    plan.py            # shipyard plan — planning agent runner (CI only)
+    publish.py         # shipyard publish-execution — push branch + open PR (CI only)
   prompts/
     planner.md         # prompt for plan authoring (used by humans / plan agents)
     implementer.md     # prompt for the implementer agent
@@ -106,4 +113,9 @@ shipyard/
     code-quality-reviewer.md  # prompt for the code quality reviewer
   templates/
     epic-driver.yml    # bundled workflow template (SHIPYARD_VERSION placeholder)
+    plan-driver.yml    # bundled plan workflow template (SHIPYARD_VERSION placeholder)
+  utils/
+    git.py             # git subprocess wrappers (checkout, push, reset, get_head_sha, …)
+    gh.py              # gh CLI wrappers + GitHub output helpers (post_issue_comment, create_pull_request, …)
+    github_event.py    # extract-github-event command + event parsing helpers
 ```

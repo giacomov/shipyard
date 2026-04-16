@@ -1,6 +1,6 @@
 # CLI Reference
 
-Shipyard exposes five commands through the `shipyard` entry point.
+Shipyard exposes seven commands through the `shipyard` entry point.
 
 ```
 shipyard --help
@@ -10,30 +10,38 @@ shipyard --help
 
 ## `shipyard init`
 
-Set up the Shipyard epic-driver workflow in a repository.
+Set up the Shipyard workflows in a repository.
 
-**Purpose:** Copies the bundled `epic-driver.yml` template into `.github/workflows/` and substitutes `SHIPYARD_VERSION` with the installed package version.
+**Purpose:** Copies the bundled `epic-driver.yml` and `plan-driver.yml` templates into `.github/workflows/` and substitutes `SHIPYARD_VERSION` with the installed package version (or `main` when `--from-main` is set).
 
 **Arguments and flags:**
 
 | Name | Type | Description |
 |------|------|-------------|
 | `PATH` | positional argument | Target repository directory (default: `.`) |
-| `--force` | flag | Overwrite an existing `epic-driver.yml` |
+| `--force` | flag | Overwrite existing workflow files |
+| `--skip-plan-driver` | flag | Only install `epic-driver.yml`, skip `plan-driver.yml` |
+| `--from-main` | flag | Install shipyard from HEAD of `main` instead of the pinned version |
 
-**Outputs:** Creates `.github/workflows/epic-driver.yml` in the target directory.
+**Outputs:** Creates `.github/workflows/epic-driver.yml` (and `plan-driver.yml` unless skipped) in the target directory.
 
 **Example:**
 
 ```bash
-# Scaffold workflow in the current repo
+# Scaffold both workflows in the current repo
 shipyard init
 
 # Scaffold into a different repo directory
 shipyard init ../my-other-repo
 
-# Overwrite an existing workflow
+# Overwrite existing workflows
 shipyard init --force
+
+# Install from main branch (useful before tagging a release)
+shipyard init --from-main
+
+# Only install the epic driver
+shipyard init --skip-plan-driver
 ```
 
 After running, add `CLAUDE_CODE_OAUTH_TOKEN` as a secret in the target repository's settings.
@@ -106,6 +114,55 @@ Requires `gh` CLI to be authenticated. Exits with code 1 on partial failures (so
 
 ---
 
+## `shipyard plan` (CI only)
+
+Generate or update an implementation plan for a GitHub issue.
+
+**Purpose:** Runs a planning agent to produce a structured markdown implementation plan, writing it to `plans/i<issue-number>.md`. Called by the `plan` job in `plan-driver.yml`. Does not perform any git or GitHub operations — those are handled by the surrounding workflow steps.
+
+**Configuration:**
+
+| Flag | Description |
+|------|-------------|
+| `--prompt TEXT` | Inline planning context |
+| `--prompt-file FILE` | File containing planning context |
+| `--issue-number TEXT` | Issue number (used to name the output file, default: `local-test`) |
+| `--issue-title TEXT` | Issue title (passed through to the workflow for PR creation) |
+| `--pr-number INT` | PR number — triggers re-planning mode |
+| `--existing-plan-path FILE` | Existing plan file to revise (re-planning only) |
+| `--review-feedback-file FILE` | File containing review feedback to incorporate (re-planning only) |
+
+One of `--prompt` or `--prompt-file` is required.
+
+**Outputs:**
+
+- Writes `plans/i<issue-number>.md` (creates the `plans/` directory if needed).
+- Prints the plan file path to stdout.
+
+**Modes:**
+
+- **Initial plan** (no `--pr-number`): generates a plan from scratch given the issue context.
+- **Re-plan** (`--pr-number` set): revises an existing plan incorporating review feedback.
+
+**Example:**
+
+```bash
+# Generate a plan locally
+shipyard plan --prompt "Add a rate limiter to the API" --issue-number 42
+
+# Re-plan with review feedback
+shipyard plan \
+  --pr-number 99 \
+  --prompt-file prompt.txt \
+  --issue-number 42 \
+  --existing-plan-path plans/i42.md \
+  --review-feedback-file feedback.txt
+```
+
+**Not intended for direct use outside CI** (the workflow handles git checkout, commit, and PR creation around it). Can be run locally to test the planning agent without side effects.
+
+---
+
 ## `shipyard find-work` (CI only)
 
 Find unblocked sub-issues for the current epic.
@@ -136,7 +193,7 @@ Find unblocked sub-issues for the current epic.
 
 Run the three-agent pipeline for unblocked issues.
 
-**Purpose:** Reads the work payload from `$WORK_JSON`, creates a feature branch, and runs the implementer → spec reviewer → code quality reviewer pipeline for each issue. On success, pushes the branch and opens a PR. Called by the `execute` job in `epic-driver.yml`.
+**Purpose:** Reads the work payload from `$WORK_JSON` and runs the implementer → spec reviewer → code quality reviewer pipeline for each issue sequentially. Writes results to `shipyard-results.json` for the subsequent `publish-execution` step. Called by the `execute` job in `epic-driver.yml`.
 
 **Configuration:** Entirely via environment variables:
 
@@ -144,14 +201,40 @@ Run the three-agent pipeline for unblocked issues.
 |----------|-------------|
 | `WORK_JSON` | JSON payload from `shipyard find-work` |
 | `CLAUDE_CODE_OAUTH_TOKEN` | OAuth token for Claude Code agents |
-| `GITHUB_RUN_ID` | Used to name the feature branch (falls back to current epoch seconds if unset) |
 
 **Outputs:**
 
-- Creates and pushes a branch named `shipyard/epic-<N>-run-<RUN_ID>`
-- Opens a PR against `main` titled `shipyard: implement N issue(s) from epic #N`
-- Posts a comment on each failed issue explaining why it was skipped
+- Writes `shipyard-results.json` with `{ "successful": [<issue numbers>], "failed": [<issue numbers>] }`.
+- Posts a comment on each failed issue explaining why it was skipped.
+- Exits non-zero if any issues failed.
 
-> **Note:** The PR base branch is hardcoded to `main`. Repositories whose default branch has a different name must edit the workflow's `execute` step accordingly.
+Does **not** create a branch, push, or open a PR — that is handled by `shipyard publish-execution`.
 
 **Not intended for direct use outside CI.** See [agent-pipeline.md](agent-pipeline.md) for pipeline details.
+
+---
+
+## `shipyard publish-execution` (CI only)
+
+Push the implementation branch and open a pull request.
+
+**Purpose:** Reads `shipyard-results.json` written by `shipyard execute`, pushes the branch, and opens a PR against `main` that closes all successfully-implemented issues. Skips silently if no issues succeeded. Called as the final step of the `execute` job in `epic-driver.yml`, with `if: always()` so it runs even if `shipyard execute` exits non-zero.
+
+**Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--branch TEXT` | Branch to push (required) |
+| `--results-file FILE` | Path to results JSON (default: `shipyard-results.json`) |
+
+**Configuration:** Also reads `$WORK_JSON` for repo and epic metadata.
+
+**Outputs:**
+
+- Pushes the branch to origin.
+- Opens a PR titled `shipyard: implement N issue(s) from epic #<N>` with `Closes #<n>` lines for each successful issue.
+- Prints the PR URL to stdout.
+
+> **Note:** The PR base branch is hardcoded to `main`. Repositories whose default branch has a different name must edit the workflow's `publish-execution` step accordingly.
+
+**Not intended for direct use outside CI.**
