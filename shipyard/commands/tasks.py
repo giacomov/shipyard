@@ -4,12 +4,11 @@
 import asyncio
 import json
 import os
-import sys
 import uuid
 from pathlib import Path
 
 import click
-from claude_agent_sdk import ClaudeAgentOptions, query
+from claude_agent_sdk import ClaudeAgentOptions, ProcessError, query
 
 _TASK_AGENT_PROMPT = """\
 Read the implementation plan at {plan_path} and create tasks with dependencies for it \
@@ -32,7 +31,6 @@ async def _run_task_agent(prompt: str, cwd: str) -> None:
         permission_mode="bypassPermissions",
         allowed_tools=["Read", "TaskCreate"],
         cwd=cwd,
-        stderr=lambda line: print(line, file=sys.stderr, flush=True),
     )
     async for _ in query(prompt=prompt, options=options):
         pass
@@ -99,6 +97,13 @@ def tasks(input_file: str, output_file: str | None, title: str) -> None:
     try:
         prompt = _TASK_AGENT_PROMPT.format(plan_path=plan_path)
         asyncio.run(_run_task_agent(prompt, cwd=os.getcwd()))
+    except ProcessError as e:
+        raise click.ClickException(
+            f"Claude CLI subprocess failed (exit code {e.exit_code}).\n"
+            "The claude CLI's stderr output should appear above this message."
+        ) from e
+    except Exception as e:
+        raise click.ClickException(f"Agent error: {e}") from e
     finally:
         if env_backup is None:
             os.environ.pop("CLAUDE_CODE_TASK_LIST_ID", None)

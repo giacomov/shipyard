@@ -4,7 +4,6 @@
 import asyncio
 import os
 import re
-import sys
 
 import click
 from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, TextBlock, query
@@ -53,7 +52,6 @@ async def run_plan_agent(prompt: str, cwd: str) -> str:
         permission_mode="bypassPermissions",
         allowed_tools=["Read", "Glob", "Grep"],
         cwd=cwd,
-        stderr=lambda line: print(line, file=sys.stderr, flush=True),
     )
     output_parts: list[str] = []
     async for message in query(prompt=prompt, options=options):
