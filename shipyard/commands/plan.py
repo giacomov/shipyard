@@ -8,7 +8,7 @@ import re
 import click
 from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, TextBlock, query
 
-from shipyard.utils.agent import report_error
+from shipyard.utils.agent import report_results
 
 _INITIAL_PROMPT = """\
 Read the issue context and the codebase, then write an implementation plan in Markdown.
@@ -57,11 +57,13 @@ async def run_plan_agent(prompt: str, cwd: str) -> str:
     )
     output_parts: list[str] = []
     async for message in query(prompt=prompt, options=options):
-        if isinstance(message, AssistantMessage):
-            report_error(message)
-            for block in message.content:
-                if isinstance(block, TextBlock):
-                    output_parts.append(block.text)
+        report_results(message)
+        match message:
+            case AssistantMessage():
+                for block in message.content:
+                    match block:
+                        case TextBlock():
+                            output_parts.append(block.text)
     return "\n".join(output_parts)
 
 

@@ -8,9 +8,9 @@ import uuid
 from pathlib import Path
 
 import click
-from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, ProcessError, query
+from claude_agent_sdk import ClaudeAgentOptions, ProcessError, query
 
-from shipyard.utils.agent import report_error
+from shipyard.utils.agent import report_results
 
 _TASK_AGENT_PROMPT = """\
 Read the implementation plan at {plan_path} and create tasks with dependencies for it \
@@ -34,10 +34,8 @@ async def _run_task_agent(prompt: str, cwd: str) -> None:
         allowed_tools=["Read", "TaskCreate"],
         cwd=cwd,
     )
-    async for response in query(prompt=prompt, options=options):
-        match response:
-            case AssistantMessage():
-                report_error(response)
+    async for message in query(prompt=prompt, options=options):
+        report_results(message)
 
 
 def _load_task_files(task_list_id: str) -> list[dict]:
