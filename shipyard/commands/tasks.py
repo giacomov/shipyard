@@ -8,7 +8,7 @@ import uuid
 from pathlib import Path
 
 import click
-from claude_agent_sdk import ClaudeAgentOptions, ProcessError, query
+from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, ProcessError, TextBlock, query
 
 from shipyard.utils.agent import report_results
 
@@ -36,6 +36,12 @@ async def _run_task_agent(prompt: str, cwd: str) -> None:
     )
     async for message in query(prompt=prompt, options=options):
         report_results(message)
+        match message:
+            case AssistantMessage():
+                for block in message.content:
+                    match block:
+                        case TextBlock():
+                            click.echo(block.text, err=True)
 
 
 def _load_task_files(task_list_id: str) -> list[dict]:
