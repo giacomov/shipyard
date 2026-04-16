@@ -33,9 +33,12 @@ jobs:
           echo "issue_number=${ISSUE}" >> "$GITHUB_OUTPUT"
 
       - name: Generate tasks.json from plan
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           ISSUE="${{ steps.extract.outputs.issue_number }}"
-          shipyard tasks -i "plans/i${ISSUE}.md" -o tasks.json
+          ISSUE_TITLE=$(gh issue view "$ISSUE" --repo "${{ github.repository }}" --json title --jq '.title')
+          shipyard tasks -i "plans/i${ISSUE}.md" -o tasks.json --title "Implementation: ${ISSUE_TITLE}"
 
       - name: Sync tasks to GitHub Issues
         env:

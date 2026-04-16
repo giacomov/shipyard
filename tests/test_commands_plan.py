@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 from click.testing import CliRunner
 
-from shipyard.commands.plan import plan
+from shipyard.commands.plan import _strip_outer_fence, plan
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
@@ -115,3 +115,33 @@ def test_plan_file_has_correct_header(tmp_cwd: Any) -> None:
     plan_file = tmp_cwd / "plans" / "i42.md"
     content = plan_file.read_text()
     assert content.startswith("<!-- Related to: #42 -->")
+
+
+# ---------------------------------------------------------------------------
+# 5. test_strip_outer_fence
+# ---------------------------------------------------------------------------
+
+
+def test_strip_outer_fence_removes_markdown_fence() -> None:
+    text = "```markdown\n# My Plan\n\nStep 1\n```"
+    assert _strip_outer_fence(text) == "# My Plan\n\nStep 1"
+
+
+def test_strip_outer_fence_removes_plain_fence() -> None:
+    text = "```\n# My Plan\n\nStep 1\n```"
+    assert _strip_outer_fence(text) == "# My Plan\n\nStep 1"
+
+
+def test_strip_outer_fence_leaves_unfenced_text_unchanged() -> None:
+    text = "# My Plan\n\nStep 1"
+    assert _strip_outer_fence(text) == "# My Plan\n\nStep 1"
+
+
+def test_strip_outer_fence_strips_surrounding_whitespace() -> None:
+    text = "  \n# My Plan\n\nStep 1\n  "
+    assert _strip_outer_fence(text) == "# My Plan\n\nStep 1"
+
+
+def test_strip_outer_fence_partial_fence_not_removed() -> None:
+    text = "```markdown\n# My Plan\n\nStep 1"
+    assert _strip_outer_fence(text) == "```markdown\n# My Plan\n\nStep 1"
