@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
 """shipyard tasks — extract tasks from a markdown plan using an AI agent."""
 
-import asyncio
 import json
 import os
+import subprocess
 import uuid
 from pathlib import Path
 
 import click
-from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, ProcessError, TextBlock, query
-
-from shipyard.utils.agent import report_results
 
 _TASK_AGENT_PROMPT = """\
 Read the implementation plan at {plan_path} and create tasks with dependencies for it \
@@ -28,21 +25,27 @@ IMPORTANT: create tasks with dependencies.
 """
 
 
-async def _run_task_agent(prompt: str, cwd: str) -> None:
-    options = ClaudeAgentOptions(
-        permission_mode="bypassPermissions",
-        allowed_tools=["Read", "TaskCreate"],
-        system_prompt={"type": "preset", "preset": "claude_code"},
+def _run_task_agent(prompt: str, cwd: str) -> None:
+    result = subprocess.run(
+        [
+            "claude",
+            "--print",
+            "--permission-mode",
+            "bypassPermissions",
+            "--allowedTools",
+            "Read,TaskCreate",
+        ],
+        input=prompt,
+        text=True,
+        capture_output=True,
         cwd=cwd,
     )
-    async for message in query(prompt=prompt, options=options):
-        report_results(message)
-        match message:
-            case AssistantMessage():
-                for block in message.content:
-                    match block:
-                        case TextBlock():
-                            click.echo(block.text, err=True)
+    if result.stdout:
+        click.echo(result.stdout.rstrip(), err=True)
+    if result.returncode != 0:
+        if result.stderr:
+            click.echo(result.stderr.rstrip(), err=True)
+        raise RuntimeError(f"claude exited with code {result.returncode}")
 
 
 def _load_task_files(task_list_id: str) -> list[dict]:
@@ -105,14 +108,9 @@ def tasks(input_file: str, output_file: str | None, title: str) -> None:
     os.environ["CLAUDE_CODE_TASK_LIST_ID"] = task_list_id
     try:
         prompt = _TASK_AGENT_PROMPT.format(plan_path=plan_path)
-        asyncio.run(_run_task_agent(prompt, cwd=os.getcwd()))
-    except ProcessError as e:
-        raise click.ClickException(
-            f"Claude CLI subprocess failed (exit code {e.exit_code}).\n"
-            "The claude CLI's stderr output should appear above this message."
-        ) from e
+        _run_task_agent(prompt, cwd=os.getcwd())
     except Exception as e:
-        raise click.ClickException(f"Agent error: {e}") from e
+        raise click.ClickException(str(e)) from e
     finally:
         if env_backup is None:
             os.environ.pop("CLAUDE_CODE_TASK_LIST_ID", None)
