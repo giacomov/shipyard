@@ -55,6 +55,29 @@ def fetch_issue_context(repo: str, issue_number: int) -> dict[str, Any]:
     }
 
 
+def fetch_review_inline_comments(repo: str, pr_number: int, review_id: int) -> list[dict[str, Any]]:
+    """Return inline comments for a specific review as a list of dicts with path, body, diff_hunk."""
+    raw = gh(["api", f"/repos/{repo}/pulls/{pr_number}/reviews/{review_id}/comments"])
+    comments: list[dict[str, Any]] = json.loads(raw)
+    return [
+        {"path": c.get("path", ""), "body": c.get("body", ""), "diff_hunk": c.get("diff_hunk", "")}
+        for c in comments
+    ]
+
+
+def build_review_feedback(review_body: str, inline_comments: list[dict[str, Any]]) -> str:
+    """Combine review body and inline comments into a single feedback string."""
+    parts: list[str] = []
+    if review_body.strip():
+        parts.append(f"Review summary:\n{review_body.strip()}")
+    for c in inline_comments:
+        header = f"Inline comment on {c['path']}:"
+        hunk = f"```\n{c['diff_hunk']}\n```" if c["diff_hunk"] else ""
+        body = c["body"].strip()
+        parts.append("\n".join(filter(None, [header, hunk, body])))
+    return "\n\n".join(parts)
+
+
 def extract_issue_from_pr_review(event_json: dict[str, Any], repo: str) -> int:
     """
     Parses PR body from event_json["pull_request"]["body"]
@@ -100,6 +123,7 @@ def extract_github_event() -> None:
     elif "review" in event_json and event_json["review"]["state"].upper() == "CHANGES_REQUESTED":
         review_body: str = event_json["review"].get("body") or ""
         pr_number: int = event_json["pull_request"]["number"]
+        review_id: int = event_json["review"]["id"]
 
         try:
             issue_number = extract_issue_from_pr_review(event_json, repo)
@@ -108,6 +132,8 @@ def extract_github_event() -> None:
             sys.exit(1)
 
         context = fetch_issue_context(repo, issue_number)
+        inline_comments = fetch_review_inline_comments(repo, pr_number, review_id)
+        feedback = build_review_feedback(review_body, inline_comments)
 
         with open("prompt.txt", "w") as f:
             f.write(
@@ -115,7 +141,7 @@ def extract_github_event() -> None:
             )
 
         with open("review-feedback.txt", "w") as f:
-            f.write(review_body)
+            f.write(feedback)
 
         _set_github_output("issue_number", str(issue_number))
         _set_github_output("issue_title", context["issue_title"])

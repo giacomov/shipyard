@@ -175,7 +175,7 @@ def test_extract_github_event_pr_review(
     tmp_path: Path,
 ) -> None:
     event_json: dict[str, Any] = {
-        "review": {"state": "changes_requested", "body": "Please add tests"},
+        "review": {"id": 999, "state": "changes_requested", "body": "Please add tests"},
         "pull_request": {"number": 3, "body": "Closes #7"},
     }
     event_file = tmp_path / "event.json"
@@ -184,10 +184,15 @@ def test_extract_github_event_pr_review(
     github_output_file = tmp_path / "github_output.txt"
     github_output_file.write_text("")
 
-    gh_response: dict[str, Any] = {"number": 7, "title": "Fix the thing", "body": "Details"}
-    mock_result = MagicMock()
-    mock_result.returncode = 0
-    mock_result.stdout = json.dumps(gh_response)
+    issue_mock = MagicMock()
+    issue_mock.returncode = 0
+    issue_mock.stdout = json.dumps({"number": 7, "title": "Fix the thing", "body": "Details"})
+
+    inline_mock = MagicMock()
+    inline_mock.returncode = 0
+    inline_mock.stdout = json.dumps(
+        [{"path": "README.md", "body": "Add more detail here", "diff_hunk": "@@ -1,3 +1,4 @@"}]
+    )
 
     env_vars: dict[str, str] = {
         "GITHUB_EVENT_PATH": str(event_file),
@@ -196,7 +201,7 @@ def test_extract_github_event_pr_review(
     }
 
     runner = CliRunner()
-    with patch("subprocess.run", return_value=mock_result):
+    with patch("subprocess.run", side_effect=[issue_mock, inline_mock]):
         with runner.isolated_filesystem() as isolated_dir:
             result = runner.invoke(extract_github_event, env=env_vars)
             prompt_path = Path(isolated_dir) / "prompt.txt"
@@ -205,11 +210,56 @@ def test_extract_github_event_pr_review(
             assert result.exit_code == 0, result.output
             assert prompt_path.exists(), "prompt.txt was not written"
             assert review_path.exists(), "review-feedback.txt was not written"
-            assert "Please add tests" in review_path.read_text()
+            feedback = review_path.read_text()
+            assert "Please add tests" in feedback
+            assert "Add more detail here" in feedback
+            assert "README.md" in feedback
 
     output_text = github_output_file.read_text()
     assert "has_review" in output_text
     assert "true" in output_text
+
+
+def test_extract_github_event_pr_review_inline_only(
+    tmp_path: Path,
+) -> None:
+    """Review body is empty but inline comments carry the feedback."""
+    event_json: dict[str, Any] = {
+        "review": {"id": 42, "state": "changes_requested", "body": ""},
+        "pull_request": {"number": 5, "body": "Closes #9"},
+    }
+    event_file = tmp_path / "event.json"
+    event_file.write_text(json.dumps(event_json))
+
+    github_output_file = tmp_path / "github_output.txt"
+    github_output_file.write_text("")
+
+    issue_mock = MagicMock()
+    issue_mock.returncode = 0
+    issue_mock.stdout = json.dumps({"number": 9, "title": "Some issue", "body": "Do stuff"})
+
+    inline_mock = MagicMock()
+    inline_mock.returncode = 0
+    inline_mock.stdout = json.dumps(
+        [{"path": "src/foo.py", "body": "Rename this variable", "diff_hunk": "@@ -10,3 +10,4 @@"}]
+    )
+
+    env_vars: dict[str, str] = {
+        "GITHUB_EVENT_PATH": str(event_file),
+        "GITHUB_REPOSITORY": "owner/repo",
+        "GITHUB_OUTPUT": str(github_output_file),
+    }
+
+    runner = CliRunner()
+    with patch("subprocess.run", side_effect=[issue_mock, inline_mock]):
+        with runner.isolated_filesystem() as isolated_dir:
+            result = runner.invoke(extract_github_event, env=env_vars)
+            review_path = Path(isolated_dir) / "review-feedback.txt"
+
+            assert result.exit_code == 0, result.output
+            feedback = review_path.read_text()
+            assert "Rename this variable" in feedback
+            assert "src/foo.py" in feedback
 
 
 # ---------------------------------------------------------------------------
