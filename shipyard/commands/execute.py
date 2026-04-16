@@ -13,6 +13,7 @@ from pathlib import Path
 import click
 from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, TextBlock, query
 
+from shipyard.utils.agent import report_error
 from shipyard.utils.gh import post_issue_comment
 from shipyard.utils.git import get_head_sha, reset_hard
 
@@ -87,6 +88,7 @@ async def run_agent(prompt: str, options: ClaudeAgentOptions) -> str:
     output_parts: list[str] = []
     async for message in query(prompt=prompt, options=options):
         if isinstance(message, AssistantMessage):
+            report_error(message)
             for block in message.content:
                 if isinstance(block, TextBlock):
                     output_parts.append(block.text)

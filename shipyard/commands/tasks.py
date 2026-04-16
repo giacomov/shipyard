@@ -10,6 +10,8 @@ from pathlib import Path
 import click
 from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, ProcessError, query
 
+from shipyard.utils.agent import report_error
+
 _TASK_AGENT_PROMPT = """\
 Read the implementation plan at {plan_path} and create tasks with dependencies for it \
 using the TaskCreate tool.
@@ -35,8 +37,7 @@ async def _run_task_agent(prompt: str, cwd: str) -> None:
     async for response in query(prompt=prompt, options=options):
         match response:
             case AssistantMessage():
-                if response.error is not None:
-                    raise RuntimeError(f"Agent error: {response.error}")
+                report_error(response)
 
 
 def _load_task_files(task_list_id: str) -> list[dict]:
