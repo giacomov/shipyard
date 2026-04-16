@@ -33,7 +33,7 @@ def test_parse_github_event_issues_labeled(monkeypatch: pytest.MonkeyPatch) -> N
 def test_parse_github_event_pr_review(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GITHUB_REPOSITORY", "owner/repo")
     event_json: dict[str, Any] = {
-        "review": {"state": "CHANGES_REQUESTED"},
+        "review": {"state": "changes_requested"},
         "pull_request": {"body": "Closes #7"},
     }
 
@@ -175,7 +175,7 @@ def test_extract_github_event_pr_review(
     tmp_path: Path,
 ) -> None:
     event_json: dict[str, Any] = {
-        "review": {"state": "CHANGES_REQUESTED", "body": "Please add tests"},
+        "review": {"state": "changes_requested", "body": "Please add tests"},
         "pull_request": {"number": 3, "body": "Closes #7"},
     }
     event_file = tmp_path / "event.json"

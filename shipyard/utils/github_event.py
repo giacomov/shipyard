@@ -97,7 +97,7 @@ def extract_github_event() -> None:
         _set_github_output("issue_title", issue_title)
         _set_github_output("has_review", "false")
 
-    elif "review" in event_json and event_json["review"]["state"] == "CHANGES_REQUESTED":
+    elif "review" in event_json and event_json["review"]["state"].upper() == "CHANGES_REQUESTED":
         review_body: str = event_json["review"].get("body") or ""
         pr_number: int = event_json["pull_request"]["number"]
 
