@@ -39,7 +39,7 @@ def test_init_pins_version_in_workflow(tmp_path):
     runner.invoke(init, [str(tmp_path)])
     content = (tmp_path / ".github" / "workflows" / "epic-driver.yml").read_text()
     assert "SHIPYARD_VERSION" not in content
-    assert "giacomov/shipyard@v" in content
+    assert "giacomov/shipyard@" in content
 
 
 def test_init_creates_both_workflow_files(tmp_path: Path) -> None:

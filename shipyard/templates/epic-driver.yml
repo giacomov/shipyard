@@ -35,8 +35,7 @@ jobs:
       - uses: astral-sh/setup-uv@v4
 
       - name: Install shipyard
-        # SHIPYARD_VERSION is replaced by `shipyard init` with the version of shipyard used to generate this file
-        run: uv tool install "git+https://github.com/giacomov/shipyard@vSHIPYARD_VERSION"
+        run: uv tool install "git+https://github.com/giacomov/shipyard@SHIPYARD_VERSION"
 
       - name: Find epic and unblocked issues
         id: find-work
@@ -72,8 +71,7 @@ jobs:
       - uses: astral-sh/setup-uv@v4
 
       - name: Install shipyard
-        # SHIPYARD_VERSION is replaced by `shipyard init` with the version of shipyard used to generate this file
-        run: uv tool install "git+https://github.com/giacomov/shipyard@vSHIPYARD_VERSION"
+        run: uv tool install "git+https://github.com/giacomov/shipyard@SHIPYARD_VERSION"
 
       - name: Create implementation branch
         env:

@@ -12,7 +12,13 @@ import click
 @click.option(
     "--skip-plan-driver", is_flag=True, default=False, help="Skip installing plan-driver.yml"
 )
-def init(path: str, force: bool, skip_plan_driver: bool) -> None:
+@click.option(
+    "--from-main",
+    is_flag=True,
+    default=False,
+    help="Install shipyard from HEAD of main instead of pinned version",
+)
+def init(path: str, force: bool, skip_plan_driver: bool, from_main: bool) -> None:
     """Set up the Shipyard epic-driver workflow in a repository.
 
     PATH defaults to the current directory.
@@ -27,15 +33,18 @@ def init(path: str, force: bool, skip_plan_driver: bool) -> None:
     if not skip_plan_driver and plan_dest.exists() and not force:
         raise click.ClickException(f"{plan_dest} already exists. Use --force to overwrite.")
 
-    try:
-        version = importlib.metadata.version("shipyard")
-    except importlib.metadata.PackageNotFoundError:
-        version = "0.1.0"
+    if from_main:
+        install_ref = "main"
+    else:
+        try:
+            install_ref = importlib.metadata.version("shipyard")
+        except importlib.metadata.PackageNotFoundError:
+            install_ref = "0.1.0"
 
     templates_dir = Path(__file__).parent.parent / "templates"
 
     epic_template = templates_dir / "epic-driver.yml"
-    epic_content = epic_template.read_text().replace("SHIPYARD_VERSION", version)
+    epic_content = epic_template.read_text().replace("SHIPYARD_VERSION", install_ref)
 
     epic_dest.parent.mkdir(parents=True, exist_ok=True)
     epic_dest.write_text(epic_content)
@@ -43,7 +52,7 @@ def init(path: str, force: bool, skip_plan_driver: bool) -> None:
 
     if not skip_plan_driver:
         plan_template = templates_dir / "plan-driver.yml"
-        plan_content = plan_template.read_text().replace("SHIPYARD_VERSION", version)
+        plan_content = plan_template.read_text().replace("SHIPYARD_VERSION", install_ref)
         plan_dest.write_text(plan_content)
         click.echo(f"Created {plan_dest}")
 
