@@ -26,12 +26,16 @@ def init(path: str, force: bool, skip_plan_driver: bool, from_main: bool) -> Non
     workflows_dir = Path(path) / ".github" / "workflows"
     epic_dest = workflows_dir / "epic-driver.yml"
     plan_dest = workflows_dir / "plan-driver.yml"
+    sync_dest = workflows_dir / "sync-driver.yml"
 
     if epic_dest.exists() and not force:
         raise click.ClickException(f"{epic_dest} already exists. Use --force to overwrite.")
 
     if not skip_plan_driver and plan_dest.exists() and not force:
         raise click.ClickException(f"{plan_dest} already exists. Use --force to overwrite.")
+
+    if not skip_plan_driver and sync_dest.exists() and not force:
+        raise click.ClickException(f"{sync_dest} already exists. Use --force to overwrite.")
 
     if from_main:
         install_ref = "main"
@@ -55,6 +59,11 @@ def init(path: str, force: bool, skip_plan_driver: bool, from_main: bool) -> Non
         plan_content = plan_template.read_text().replace("SHIPYARD_VERSION", install_ref)
         plan_dest.write_text(plan_content)
         click.echo(f"Created {plan_dest}")
+
+        sync_template = templates_dir / "sync-driver.yml"
+        sync_content = sync_template.read_text().replace("SHIPYARD_VERSION", install_ref)
+        sync_dest.write_text(sync_content)
+        click.echo(f"Created {sync_dest}")
 
     click.echo(
         "Next step: add CLAUDE_CODE_OAUTH_TOKEN as a secret in your GitHub repository settings."

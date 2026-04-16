@@ -89,3 +89,40 @@ def test_init_pins_version_in_plan_driver(tmp_path: Path) -> None:
     version = importlib.metadata.version("shipyard")
     assert "SHIPYARD_VERSION" not in content
     assert version in content
+
+
+def test_init_creates_sync_driver(tmp_path: Path) -> None:
+    runner = CliRunner()
+    result = runner.invoke(init, [str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    sync_driver = tmp_path / ".github" / "workflows" / "sync-driver.yml"
+    assert sync_driver.exists()
+
+
+def test_init_skip_plan_driver_also_skips_sync_driver(tmp_path: Path) -> None:
+    runner = CliRunner()
+    result = runner.invoke(init, [str(tmp_path), "--skip-plan-driver"])
+    assert result.exit_code == 0, result.output
+    workflows_dir = tmp_path / ".github" / "workflows"
+    assert not (workflows_dir / "plan-driver.yml").exists()
+    assert not (workflows_dir / "sync-driver.yml").exists()
+
+
+def test_init_fails_if_sync_driver_already_exists(tmp_path: Path) -> None:
+    workflows_dir = tmp_path / ".github" / "workflows"
+    workflows_dir.mkdir(parents=True)
+    sync_dest = workflows_dir / "sync-driver.yml"
+    sync_dest.write_text("existing sync content")
+    runner = CliRunner()
+    result = runner.invoke(init, [str(tmp_path)])
+    assert result.exit_code != 0
+    assert sync_dest.read_text() == "existing sync content"
+
+
+def test_init_pins_version_in_sync_driver(tmp_path: Path) -> None:
+    runner = CliRunner()
+    runner.invoke(init, [str(tmp_path)])
+    content = (tmp_path / ".github" / "workflows" / "sync-driver.yml").read_text()
+    version = importlib.metadata.version("shipyard")
+    assert "SHIPYARD_VERSION" not in content
+    assert version in content

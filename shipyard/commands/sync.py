@@ -128,7 +128,7 @@ def task_body(task: dict) -> str:
     return "\n".join(lines)
 
 
-def run_sync(data: dict, repo: str, dry_run: bool) -> int:
+def run_sync(data: dict, repo: str, dry_run: bool, skip_label: bool = False) -> int:
     """Main sync logic. Returns exit code (0=success, 1=partial failures)."""
     failures: list[str] = []
 
@@ -206,14 +206,15 @@ def run_sync(data: dict, repo: str, dry_run: bool) -> int:
                 failures.append(f"blocked-by for {blocked_id}→{blocking_id}: {e}")
 
     # 5. Add in-progress label to epic
-    print("\n── Marking epic as in-progress")
-    try:
-        add_in_progress_label(repo, parent.number, dry_run)
-        if not dry_run:
-            print(f'   → added "in-progress" label to #{parent.number}')
-    except RuntimeError as e:
-        print(f"   WARNING: could not add in-progress label: {e}")
-        failures.append(f"add in-progress label: {e}")
+    if not skip_label:
+        print("\n── Marking epic as in-progress")
+        try:
+            add_in_progress_label(repo, parent.number, dry_run)
+            if not dry_run:
+                print(f'   → added "in-progress" label to #{parent.number}')
+        except RuntimeError as e:
+            print(f"   WARNING: could not add in-progress label: {e}")
+            failures.append(f"add in-progress label: {e}")
 
     # 6. Summary
     print("\n── Summary")
@@ -260,7 +261,16 @@ def validate(data: dict) -> None:
 )
 @click.option("--repo", default=None, help="Target repo as owner/repo (default: auto-detect)")
 @click.option("--dry-run", is_flag=True, help="Print actions without making API calls")
-def sync(input_file: str | None, repo: str | None, dry_run: bool) -> None:
+@click.option(
+    "--no-in-progress-label",
+    "no_in_progress_label",
+    is_flag=True,
+    default=False,
+    help="Skip adding the in-progress label to the epic issue.",
+)
+def sync(
+    input_file: str | None, repo: str | None, dry_run: bool, no_in_progress_label: bool
+) -> None:
     """Sync task JSON to GitHub Issues."""
     if input_file:
         data = json.loads(Path(input_file).read_text())
@@ -273,6 +283,6 @@ def sync(input_file: str | None, repo: str | None, dry_run: bool) -> None:
         raise click.ClickException(str(e))
 
     resolved_repo = resolve_repo(repo, dry_run)
-    exit_code = run_sync(data, resolved_repo, dry_run)
+    exit_code = run_sync(data, resolved_repo, dry_run, skip_label=no_in_progress_label)
     if exit_code != 0:
         raise SystemExit(exit_code)

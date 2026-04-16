@@ -87,10 +87,13 @@ jobs:
             git commit -m "docs: add implementation plan for issue #${ISSUE}"
             git push -u origin "$BRANCH"
             if ! gh pr view "$BRANCH" --repo "${{ github.repository }}" > /dev/null 2>&1; then
+              gh label create plan --color "0052cc" --description "Implementation plan" \
+                --repo "${{ github.repository }}" 2>/dev/null || true
               gh pr create --draft \
                 --base main --head "$BRANCH" \
                 --title "Plan: ${TITLE}" \
                 --body "Closes #${ISSUE}" \
+                --label plan \
                 --repo "${{ github.repository }}"
             fi
           fi
