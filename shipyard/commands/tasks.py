@@ -26,6 +26,9 @@ IMPORTANT: create tasks with dependencies.
 
 
 def _run_task_agent(prompt: str, cwd: str) -> None:
+    click.echo("Running task agent...")
+    click.echo(prompt)
+
     result = subprocess.run(
         [
             "claude",
