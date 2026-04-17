@@ -14,6 +14,7 @@ from claude_agent_sdk import (
     ClaudeAgentOptions,
     ClaudeSDKClient,
     ProcessError,
+    ResultMessage,
     TextBlock,
     ThinkingBlock,
     ToolUseBlock,
@@ -48,8 +49,6 @@ class SubtaskList(pydantic.BaseModel):
 
 async def receive_from_client(client: ClaudeSDKClient):
     async for message in client.receive_messages():
-        report_results(message)
-
         match message:
             case AssistantMessage():
                 for block in message.content:
@@ -60,6 +59,11 @@ async def receive_from_client(client: ClaudeSDKClient):
                             click.echo(f"[tool] {block.name}")
                         case ThinkingBlock():
                             click.echo(f"[thinking] {block.thinking}")
+
+            case ResultMessage():
+                report_results(message)
+
+                break
 
 
 async def _run_task_agent(prompt: str, cwd: str, task_list: SubtaskList) -> None:
@@ -215,6 +219,10 @@ async def _run_task_agent(prompt: str, cwd: str, task_list: SubtaskList) -> None
         version="1.0.0",
         tools=[create_task, delete_task, link_tasks, unlink_tasks, commit],
     )
+
+    import pdb
+
+    pdb.set_trace()
 
     options = ClaudeAgentOptions(
         permission_mode="bypassPermissions",
