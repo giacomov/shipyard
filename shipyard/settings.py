@@ -14,10 +14,10 @@ class Settings(BaseSettings):
     epic_label_color: str = "0075ca"
     implementer_max_retries: int = 1
 
-    planning_model: str = "opus-4.6"
+    planning_model: str = "opus"
     planning_effort: Literal["low", "medium", "high"] = "high"
 
-    execution_model: str = "sonnet-4.6"
+    execution_model: str = "sonnet"
     execution_effort: Literal["low", "medium", "high"] = "high"
 
 
