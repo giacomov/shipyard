@@ -8,6 +8,7 @@ import re
 import click
 from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, TextBlock, query
 
+from shipyard.settings import settings
 from shipyard.utils.agent import report_results
 
 _INITIAL_PROMPT = """\
@@ -53,7 +54,6 @@ async def run_plan_agent(prompt: str, cwd: str) -> str:
     options = ClaudeAgentOptions(
         permission_mode="bypassPermissions",
         allowed_tools=["Read", "Glob", "Grep"],
-        system_prompt={"type": "preset", "preset": "claude_code"},
         cwd=cwd,
     )
     output_parts: list[str] = []
@@ -118,8 +118,8 @@ def plan(
         header = f"<!-- Related to: #{issue_number} -->\n\n"
         plan_content = header + _strip_outer_fence(plan_content_raw)
 
-        os.makedirs("plans", exist_ok=True)
-        plan_path = f"plans/i{issue_number}.md"
+        os.makedirs(settings.plans_dir, exist_ok=True)
+        plan_path = f"{settings.plans_dir}/i{issue_number}.md"
         with open(plan_path, "w") as f:
             f.write(plan_content)
     else:
@@ -143,8 +143,8 @@ def plan(
         header = f"<!-- Related to: #{issue_number} -->\n\n"
         plan_content = header + _strip_outer_fence(plan_content_raw)
 
-        os.makedirs("plans", exist_ok=True)
-        plan_path = f"plans/i{issue_number}.md"
+        os.makedirs(settings.plans_dir, exist_ok=True)
+        plan_path = f"{settings.plans_dir}/i{issue_number}.md"
         with open(plan_path, "w") as f:
             f.write(plan_content)
 

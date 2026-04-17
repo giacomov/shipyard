@@ -8,16 +8,18 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
+from importlib.resources import files as _res_files
 from pathlib import Path
 
 import click
 from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, TextBlock, query
 
+from shipyard.settings import settings
 from shipyard.utils.agent import report_results
 from shipyard.utils.gh import post_issue_comment
 from shipyard.utils.git import get_head_sha, reset_hard
 
-PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
+_PROMPTS = _res_files("shipyard.data.prompts")
 
 
 class ImplementerStatus(str, Enum):
@@ -102,7 +104,6 @@ def make_agent_options(cwd: str) -> ClaudeAgentOptions:
     return ClaudeAgentOptions(
         permission_mode="bypassPermissions",
         allowed_tools=["Bash", "Read", "Write", "Edit", "Glob", "Grep"],
-        system_prompt={"type": "preset", "preset": "claude_code"},
         cwd=cwd,
     )
 
@@ -127,9 +128,9 @@ async def run_issue_pipeline(
     Returns False if the issue failed; in that case the git state is reset to base_sha.
     """
     cwd = os.getcwd()
-    implementer_tmpl = (PROMPTS_DIR / "implementer.md").read_text()
-    spec_tmpl = (PROMPTS_DIR / "spec-reviewer.md").read_text()
-    quality_tmpl = (PROMPTS_DIR / "code-quality-reviewer.md").read_text()
+    implementer_tmpl = (_PROMPTS / "implementer.md").read_text(encoding="utf-8")
+    spec_tmpl = (_PROMPTS / "spec-reviewer.md").read_text(encoding="utf-8")
+    quality_tmpl = (_PROMPTS / "code-quality-reviewer.md").read_text(encoding="utf-8")
 
     context = (
         f"Repository: {work.repo}\nEpic: #{work.epic_number} — {work.epic_title}\n{work.epic_body}"
@@ -233,6 +234,7 @@ async def run_all_issues(
             issue,
             work,
             base_sha,
+            settings.implementer_max_retries,
             reset_fn=reset_fn,
             comment_fn=comment_fn,
         )
@@ -273,7 +275,7 @@ def execute() -> None:
 
     print(f"\n── Results: {len(successful)} succeeded, {len(failed)} failed")
 
-    Path("shipyard-results.json").write_text(
+    Path(settings.results_file).write_text(
         json.dumps(
             {
                 "successful": successful,

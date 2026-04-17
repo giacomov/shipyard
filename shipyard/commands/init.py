@@ -1,9 +1,12 @@
 """shipyard init — set up the Shipyard workflow in a repository."""
 
 import importlib.metadata
+from importlib.resources import files as _res_files
 from pathlib import Path
 
 import click
+
+_TEMPLATES = _res_files("shipyard.data.templates")
 
 
 @click.command()
@@ -45,23 +48,30 @@ def init(path: str, force: bool, skip_plan_driver: bool, from_main: bool) -> Non
         except importlib.metadata.PackageNotFoundError:
             install_ref = "0.1.0"
 
-    templates_dir = Path(__file__).parent.parent / "templates"
-
-    epic_template = templates_dir / "epic-driver.yml"
-    epic_content = epic_template.read_text().replace("SHIPYARD_VERSION", install_ref)
+    epic_content = (
+        (_TEMPLATES / "epic-driver.yml")
+        .read_text(encoding="utf-8")
+        .replace("SHIPYARD_VERSION", install_ref)
+    )
 
     epic_dest.parent.mkdir(parents=True, exist_ok=True)
     epic_dest.write_text(epic_content)
     click.echo(f"Created {epic_dest}")
 
     if not skip_plan_driver:
-        plan_template = templates_dir / "plan-driver.yml"
-        plan_content = plan_template.read_text().replace("SHIPYARD_VERSION", install_ref)
+        plan_content = (
+            (_TEMPLATES / "plan-driver.yml")
+            .read_text(encoding="utf-8")
+            .replace("SHIPYARD_VERSION", install_ref)
+        )
         plan_dest.write_text(plan_content)
         click.echo(f"Created {plan_dest}")
 
-        sync_template = templates_dir / "sync-driver.yml"
-        sync_content = sync_template.read_text().replace("SHIPYARD_VERSION", install_ref)
+        sync_content = (
+            (_TEMPLATES / "sync-driver.yml")
+            .read_text(encoding="utf-8")
+            .replace("SHIPYARD_VERSION", install_ref)
+        )
         sync_dest.write_text(sync_content)
         click.echo(f"Created {sync_dest}")
 

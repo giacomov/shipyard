@@ -6,6 +6,7 @@ import os
 
 import click
 
+from shipyard.settings import settings
 from shipyard.utils.gh import gh, parse_closing_references
 from shipyard.utils.gh import set_github_output as set_output
 
@@ -61,7 +62,7 @@ def resolve_epic_number(
                 parent = data["repository"]["issue"].get("parent")
                 if parent:
                     label_names = [lbl["name"] for lbl in parent["labels"]["nodes"]]
-                    if "in-progress" in label_names:
+                    if settings.epic_status_label in label_names:
                         print(f"Found epic #{parent['number']} via GraphQL parent of #{n}.")
                         return parent["number"]
             except RuntimeError as e:
@@ -80,7 +81,7 @@ def resolve_epic_number(
                     "--state",
                     "open",
                     "--label",
-                    "in-progress",
+                    settings.epic_status_label,
                     "--json",
                     "number",
                     "--limit",

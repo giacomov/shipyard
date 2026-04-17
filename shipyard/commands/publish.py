@@ -7,6 +7,7 @@ from pathlib import Path
 
 import click
 
+from shipyard.settings import settings
 from shipyard.utils.gh import close_issues_body, create_pull_request
 from shipyard.utils.git import push
 
@@ -15,7 +16,7 @@ from shipyard.utils.git import push
 @click.option("--branch", required=True, help="Branch to push")
 @click.option(
     "--results-file",
-    default="shipyard-results.json",
+    default=settings.results_file,
     type=click.Path(exists=True),
     help="Results JSON written by shipyard execute",
 )

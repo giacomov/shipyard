@@ -5,6 +5,8 @@ import os
 import re
 import subprocess
 
+from shipyard.settings import settings
+
 
 def gh(args: list[str], dry_run: bool = False, dry_label: str = "") -> str:
     """Run a gh CLI command and return trimmed stdout.
@@ -66,7 +68,7 @@ def create_pull_request(repo: str, branch: str, title: str, body: str) -> str:
             "--repo",
             repo,
             "--base",
-            "main",
+            settings.pr_base_branch,
             "--head",
             branch,
             "--title",

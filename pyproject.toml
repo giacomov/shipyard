@@ -5,6 +5,7 @@ requires-python = ">=3.13"
 dependencies = [
     "claude-agent-sdk==0.1.59",
     "click==8.2.1",
+    "pydantic-settings==2.13.1",
 ]
 
 [project.scripts]
@@ -29,7 +30,9 @@ where = ["."]
 include = ["shipyard*"]
 
 [tool.setuptools.package-data]
-shipyard = ["templates/*.yml", "prompts/*.md", "py.typed"]
+shipyard = ["py.typed"]
+"shipyard.data.prompts" = ["*.md"]
+"shipyard.data.templates" = ["*.yml"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

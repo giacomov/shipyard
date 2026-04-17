@@ -1,82 +1,142 @@
 #!/usr/bin/env python3
 """shipyard tasks — extract tasks from a markdown plan using an AI agent."""
 
-import json
+import asyncio
 import os
-import subprocess
-import uuid
+from importlib.resources import files as _res_files
 from pathlib import Path
+from typing import Any
 
 import click
+import pydantic
+from claude_agent_sdk import (
+    AssistantMessage,
+    ClaudeAgentOptions,
+    ProcessError,
+    TextBlock,
+    create_sdk_mcp_server,
+    query,
+    tool,
+)
 
-_TASK_AGENT_PROMPT = """\
-Read the implementation plan at {plan_path} and create tasks with dependencies for it \
-using the TaskCreate tool.
-
-Each task will be implemented and merged as a separate PR. Group work so each PR is
-focused and cohesive — keep the total number of tasks small.
-
-For each task call TaskCreate with:
-- subject: short task title
-- description: what must be implemented (be specific)
-- blockedBy: list of task ids that must complete first (empty if none)
-
-IMPORTANT: create tasks with dependencies.
-"""
+from shipyard.settings import settings
+from shipyard.utils.agent import report_results
 
 
-def _run_task_agent(prompt: str, cwd: str) -> None:
-    click.echo("Running task agent...")
-    click.echo(prompt)
+class Subtask(pydantic.BaseModel):
+    task_id: str
+    title: str
+    description: str
+    blocks: set[str] = set()
+    blocked_by: set[str] = set()
 
-    result = subprocess.run(
-        [
-            "claude",
-            "--print",
-            "--permission-mode",
-            "bypassPermissions",
-            "--allowedTools",
-            "Read,TaskCreate",
-        ],
-        input=prompt,
-        text=True,
-        capture_output=True,
-        cwd=cwd,
+
+class SubtaskList(pydantic.BaseModel):
+    title: str
+    description: str
+    tasks: dict[str, Subtask] = {}
+
+    def link_tasks(
+        self,
+        task_id: str,
+        add_blocks: list[str] | None = None,
+        add_blocked_by: list[str] | None = None,
+    ) -> dict:
+        """Handle task dependencies created by the agent."""
+
+        if task_id not in self.tasks:
+            click.echo(f"Error: Task {task_id} not found for linking", err=True)
+
+            return {"error": f"Task {task_id} not found for linking"}
+
+        # Make sure all tasks exists
+        add_blocks = add_blocks or []
+        add_blocked_by = add_blocked_by or []
+
+        if not add_blocks and not add_blocked_by:
+            click.echo(f"Warning: No dependencies provided for task {task_id}", err=True)
+
+            return {"error": f"You have to provide at least one dependency for task {task_id}."}
+
+        for dep_id in add_blocks + add_blocked_by:
+            if dep_id not in self.tasks:
+                click.echo(f"Error: Dependency task {dep_id} not found for linking", err=True)
+
+                return {
+                    "error": f"Dependency task {dep_id} not found for linking. "
+                    f"Make sure to first create all tasks, then link them in a second pass."
+                }
+
+        subtask = self.tasks[task_id]
+        subtask.blocks.update(add_blocks)
+        subtask.blocked_by.update(add_blocked_by)
+
+        return {"success": True, "updated_task": subtask.model_dump()}
+
+
+async def _run_task_agent(prompt: str, cwd: str, task_list: SubtaskList) -> None:
+    # Define the custom tools
+    @tool(
+        "create_task",
+        _res_files("shipyard.data.prompts").joinpath("create-task.md").read_text(),
+        {"task_id": str, "title": str, "description": str},
     )
-    if result.stdout:
-        click.echo(result.stdout.rstrip(), err=True)
-    if result.returncode != 0:
-        if result.stderr:
-            click.echo(result.stderr.rstrip(), err=True)
-        raise RuntimeError(f"claude exited with code {result.returncode}")
+    async def create_task(args: dict[str, Any]) -> dict[str, Any]:
+        task_id = args.get("task_id")
+        title = args.get("title")
+        description = args.get("description")
 
+        if not task_id or not title or not description:
+            click.echo("Error: Missing required fields for TaskCreate", err=True)
 
-def _load_task_files(task_list_id: str) -> list[dict]:
-    task_dir = Path.home() / ".claude" / "tasks" / task_list_id
-    if not task_dir.exists():
-        return []
-    tasks = []
-    for f in task_dir.iterdir():
-        if f.suffix != ".json" or f.name.startswith("."):
-            continue
-        try:
-            tasks.append(json.loads(f.read_text()))
-        except json.JSONDecodeError:
-            continue
-    tasks.sort(key=lambda t: t.get("id", ""))
-    return tasks
+            return {
+                "error": "Missing or empty required fields: task_id, title, and description are all required."
+            }
 
+        task = Subtask(task_id=task_id, title=title, description=description)
+        task_list.tasks[task_id] = task
 
-def validate(data: dict) -> None:
-    """Raise ValueError if any dependency id is not a known task id."""
-    known_ids = {t["id"] for t in data["tasks"]}
-    for task in data["tasks"]:
-        for dep in task.get("dependencies", []):
-            if dep not in known_ids:
-                raise ValueError(
-                    f"Task {task['id']} has unknown dependency '{dep}'. "
-                    f"Known task ids: {sorted(known_ids)}"
-                )
+        return {"success": True, "created_task": task.model_dump()}
+
+    @tool(
+        "link_tasks",
+        _res_files("shipyard.data.prompts").joinpath("link-tasks.md").read_text(),
+        {
+            "task_id": str,
+            "add_blocks": list[str],
+            "add_blocked_by": list[str],
+        },
+    )
+    async def link_tasks(args: dict[str, Any]) -> dict[str, Any]:
+        return task_list.link_tasks(**args)
+
+    # Wrap the tool in an in-process MCP server
+    task_server = create_sdk_mcp_server(
+        name="task_server",
+        version="1.0.0",
+        tools=[create_task, link_tasks],
+    )
+
+    options = ClaudeAgentOptions(
+        permission_mode="bypassPermissions",
+        mcp_servers={"task_server": task_server},
+        allowed_tools=[
+            "Read",
+            "mcp__task_server__create_task",
+            "mcp__task_server__link_tasks",
+        ],
+        cwd=cwd,
+        effort="max",
+    )
+
+    async for message in query(prompt=prompt, options=options):
+        report_results(message)
+        match message:
+            case AssistantMessage():
+                for block in message.content:
+                    match block:
+                        case TextBlock():
+                            click.echo(block.text, err=True)
 
 
 @click.command()
@@ -104,48 +164,30 @@ def validate(data: dict) -> None:
 )
 def tasks(input_file: str, output_file: str | None, title: str) -> None:
     """Extract tasks from a markdown plan using an AI agent."""
+
     plan_path = Path(input_file).resolve()
-    task_list_id = str(uuid.uuid4())
 
-    env_backup = os.environ.get("CLAUDE_CODE_TASK_LIST_ID")
-    os.environ["CLAUDE_CODE_TASK_LIST_ID"] = task_list_id
+    assert plan_path.exists(), f"Input file {plan_path} does not exist"
+
+    task_list = SubtaskList(title=title, description=plan_path.read_text())
+
+    TASK_AGENT_PROMPT = _res_files("shipyard.data.prompts").joinpath("task-agent.md").read_text()
+
     try:
-        prompt = _TASK_AGENT_PROMPT.format(plan_path=plan_path)
-        _run_task_agent(prompt, cwd=os.getcwd())
+        prompt = TASK_AGENT_PROMPT.format(plan_path=plan_path)
+        asyncio.run(_run_task_agent(prompt, cwd=os.getcwd(), task_list=task_list))
+
+    except ProcessError as e:
+        raise click.ClickException(
+            f"Claude CLI subprocess failed (exit code {e.exit_code}).\n"
+            "The claude CLI's stderr output should appear above this message."
+        ) from e
+
     except Exception as e:
-        raise click.ClickException(str(e)) from e
-    finally:
-        if env_backup is None:
-            os.environ.pop("CLAUDE_CODE_TASK_LIST_ID", None)
-        else:
-            os.environ["CLAUDE_CODE_TASK_LIST_ID"] = env_backup
+        raise click.ClickException(f"Agent error: {e}") from e
 
-    raw_tasks = _load_task_files(task_list_id)
-    if not raw_tasks:
-        raise click.ClickException("Agent created no tasks")
+    # Save the tasks to the outfile
+    with open(output_file or settings.tasks_output_file, "w+") as f:
+        f.write(task_list.model_dump_json(indent=4))
 
-    result: dict = {
-        "title": title,
-        "body": "",
-        "tasks": [
-            {
-                "id": t["id"],
-                "subject": t["subject"],
-                "description": t.get("description", ""),
-                "status": "pending",
-                "dependencies": t.get("blockedBy", []),
-            }
-            for t in raw_tasks
-        ],
-    }
-
-    try:
-        validate(result)
-    except ValueError as e:
-        raise click.ClickException(str(e))
-
-    output = json.dumps(result, indent=2)
-    if output_file:
-        Path(output_file).write_text(output)
-    else:
-        click.echo(output)
+    click.echo(f"Saved {len(task_list.tasks)} tasks to {output_file or settings.tasks_output_file}")

@@ -9,6 +9,7 @@ from pathlib import Path
 
 import click
 
+from shipyard.settings import settings
 from shipyard.utils.gh import gh, resolve_repo
 
 
@@ -104,10 +105,21 @@ def add_in_progress_label(repo: str, issue_number: int, dry_run: bool) -> None:
     """Ensure 'in-progress' label exists, then apply it to the issue."""
     if not dry_run:
         ensure_label_exists(
-            repo, "in-progress", "0075ca", "Work is actively being driven by the epic driver"
+            repo,
+            settings.epic_status_label,
+            settings.epic_label_color,
+            "Work is actively being driven by the epic driver",
         )
     gh(
-        ["issue", "edit", str(issue_number), "--repo", repo, "--add-label", "in-progress"],
+        [
+            "issue",
+            "edit",
+            str(issue_number),
+            "--repo",
+            repo,
+            "--add-label",
+            settings.epic_status_label,
+        ],
         dry_run=dry_run,
         dry_label=f"add in-progress label to #{issue_number}",
     )
