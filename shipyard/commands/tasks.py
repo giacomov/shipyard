@@ -46,6 +46,22 @@ class SubtaskList(pydantic.BaseModel):
         return v
 
 
+async def receive_from_client(client: ClaudeSDKClient):
+    async for message in client.receive_messages():
+        report_results(message)
+
+        match message:
+            case AssistantMessage():
+                for block in message.content:
+                    match block:
+                        case TextBlock():
+                            click.echo(f"[text] {block.text}")
+                        case ToolUseBlock():
+                            click.echo(f"[tool] {block.name}")
+                        case ThinkingBlock():
+                            click.echo(f"[thinking] {block.thinking}")
+
+
 async def _run_task_agent(prompt: str, cwd: str, task_list: SubtaskList) -> None:
     # Define the custom tools
     @tool(
@@ -218,19 +234,7 @@ async def _run_task_agent(prompt: str, cwd: str, task_list: SubtaskList) -> None
     async with ClaudeSDKClient(options=options) as client:
         await client.query(prompt)
 
-        async for message in client.receive_messages():
-            report_results(message)
-
-            match message:
-                case AssistantMessage():
-                    for block in message.content:
-                        match block:
-                            case TextBlock():
-                                click.echo(f"[text] {block.text}")
-                            case ToolUseBlock():
-                                click.echo(f"[tool] {block.name}({block.input})")
-                            case ThinkingBlock():
-                                click.echo(f"[thinking] {block.thinking}")
+        await receive_from_client(client)
 
         # We re-try up to 5 times
         for _ in range(5):
@@ -254,6 +258,8 @@ async def _run_task_agent(prompt: str, cwd: str, task_list: SubtaskList) -> None
                 available tools (like delete_task, unlink_tasks, create_task, link_tasks).
                 """
             )
+
+            await receive_from_client(client)
 
             if task_list.committed and not task_list.drafting:
                 click.echo("Tasks committed by the agent.")
