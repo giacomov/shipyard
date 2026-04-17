@@ -13,4 +13,4 @@ Use this tool when asked to.
 ## Tips
 
 - Create tasks with clear, specific subjects that describe the outcome
-- After creating tasks, use link_tasks to set up dependencies (blocks/blocked_by) if needed
+- After creating tasks, use link_tasks to set up dependencies if needed

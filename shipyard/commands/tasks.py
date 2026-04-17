@@ -27,7 +27,6 @@ class Subtask(pydantic.BaseModel):
     task_id: str
     title: str
     description: str
-    blocks: set[str] = set()
     blocked_by: set[str] = set()
 
 
@@ -39,7 +38,6 @@ class SubtaskList(pydantic.BaseModel):
     def link_tasks(
         self,
         task_id: str,
-        add_blocks: list[str] | None = None,
         add_blocked_by: list[str] | None = None,
     ) -> dict:
         """Handle task dependencies created by the agent."""
@@ -50,15 +48,14 @@ class SubtaskList(pydantic.BaseModel):
             return {"error": f"Task {task_id} not found for linking"}
 
         # Make sure all tasks exists
-        add_blocks = add_blocks or []
         add_blocked_by = add_blocked_by or []
 
-        if not add_blocks and not add_blocked_by:
+        if not add_blocked_by:
             click.echo(f"Warning: No dependencies provided for task {task_id}", err=True)
 
             return {"error": f"You have to provide at least one dependency for task {task_id}."}
 
-        for dep_id in add_blocks + add_blocked_by:
+        for dep_id in add_blocked_by:
             if dep_id not in self.tasks:
                 click.echo(f"Error: Dependency task {dep_id} not found for linking", err=True)
 
@@ -68,7 +65,6 @@ class SubtaskList(pydantic.BaseModel):
                 }
 
         subtask = self.tasks[task_id]
-        subtask.blocks.update(add_blocks)
         subtask.blocked_by.update(add_blocked_by)
 
         return {"success": True, "updated_task": subtask.model_dump()}
@@ -103,7 +99,6 @@ async def _run_task_agent(prompt: str, cwd: str, task_list: SubtaskList) -> None
         _res_files("shipyard.data.prompts").joinpath("link-tasks.md").read_text(),
         {
             "task_id": str,
-            "add_blocks": list[str],
             "add_blocked_by": list[str],
         },
     )
