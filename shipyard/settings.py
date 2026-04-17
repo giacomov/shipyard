@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,10 +15,10 @@ class Settings(BaseSettings):
     implementer_max_retries: int = 1
 
     planning_model: str = "opus-4.6"
-    planning_effort: str = "high"
+    planning_effort: Literal["low", "medium", "high"] = "high"
 
     execution_model: str = "sonnet-4.6"
-    execution_effort: str = "high"
+    execution_effort: Literal["low", "medium", "high"] = "high"
 
 
 settings = Settings()

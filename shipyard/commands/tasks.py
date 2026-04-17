@@ -234,9 +234,10 @@ async def _run_task_agent(prompt: str, cwd: str, task_list: SubtaskList) -> None
             "mcp__task_server__commit",
         ],
         cwd=cwd,
-        effort="max",
         system_prompt={"type": "preset", "preset": "claude_code"},
         setting_sources=["project"],
+        model=settings.planning_model,
+        effort=settings.planning_effort,
     )
 
     async with ClaudeSDKClient(options=options) as client:
