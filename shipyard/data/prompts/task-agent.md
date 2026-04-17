@@ -17,7 +17,7 @@ using the create_task tool.
     - description: what must be implemented (be specific). This description must contain all the details that an implementation agent will need to implement this task. However, keep the context at a high level, aim for context and not implementation.
 - Then call link_tasks to establish dependencies between the tasks
 
-You will then get feedback on the structure you created. If you need to make corrections, use the delete_task and the unlink_tasks tools as needed.
+After you are done, you will receive back a JSON blob describing the structure you created. If you need to make corrections, use the delete_task and the unlink_tasks tools as needed.
 
 ## Tips
 

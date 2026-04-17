@@ -8,7 +8,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import click
+import pydantic
 
+from shipyard.schemas import Subtask, SubtaskList
 from shipyard.settings import settings
 from shipyard.utils.gh import gh, resolve_repo
 
@@ -125,37 +127,48 @@ def add_in_progress_label(repo: str, issue_number: int, dry_run: bool) -> None:
     )
 
 
-def task_body(task: dict) -> str:
-    """Format the GitHub issue body for a task dict."""
+def task_body(subtask: Subtask) -> str:
+    """Format the GitHub issue body for a Subtask."""
     status_emoji = {"pending": "⬜", "in_progress": "🔄", "completed": "✅"}
-    emoji = status_emoji.get(task.get("status", "pending"), "⬜")
+    emoji = status_emoji.get(subtask.status, "⬜")
     lines = []
-    if task.get("description"):
-        lines.append(task["description"])
+    if subtask.description:
+        lines.append(subtask.description)
         lines.append("")
-    lines.append(f"**Status:** {emoji} `{task.get('status', 'pending')}`")
-    deps = task.get("dependencies", [])
-    if deps:
-        lines.append(f"**Depends on task IDs:** {', '.join(deps)}")
+    lines.append(f"**Status:** {emoji} `{subtask.status}`")
+    if subtask.blocked_by:
+        lines.append(f"**Depends on task IDs:** {', '.join(sorted(subtask.blocked_by))}")
     return "\n".join(lines)
 
 
-def run_sync(data: dict, repo: str, dry_run: bool, skip_label: bool = False) -> int:
+def validate(task_list: SubtaskList) -> None:
+    """Post-Pydantic validation: non-empty tasks and valid blocked_by references."""
+    if not task_list.tasks:
+        raise ValueError('Input JSON must have a non-empty "tasks" dict.')
+    all_ids = set(task_list.tasks.keys())
+    for task_id, subtask in task_list.tasks.items():
+        for dep in subtask.blocked_by:
+            if dep not in all_ids:
+                raise ValueError(f'Task {task_id} has unknown dependency "{dep}".')
+
+
+def run_sync(task_list: SubtaskList, repo: str, dry_run: bool, skip_label: bool = False) -> int:
     """Main sync logic. Returns exit code (0=success, 1=partial failures)."""
     failures: list[str] = []
+    tasks = list(task_list.tasks.values())
 
     print(f"\nRepository: {repo}")
-    print(f"Tasks: {len(data['tasks'])}")
+    print(f"Tasks: {len(tasks)}")
     if dry_run:
         print("Mode: dry-run (no API calls)\n")
 
     # 1. Create parent epic issue
-    print(f'\n── Creating parent issue: "{data["title"]}"')
+    print(f'\n── Creating parent issue: "{task_list.title}"')
     try:
         parent = create_issue(
             repo,
-            data["title"],
-            data.get("body") or f"Task list with {len(data['tasks'])} items.",
+            task_list.title,
+            task_list.description or f"Task list with {len(tasks)} items.",
             dry_run,
         )
         if not dry_run:
@@ -167,33 +180,31 @@ def run_sync(data: dict, repo: str, dry_run: bool, skip_label: bool = False) -> 
     # 2. Create one issue per task
     print("\n── Creating task issues")
     issue_map: dict[str, IssueRef] = {}
-    for task in data["tasks"]:
-        print(f"   [{task['id']}] {task['subject']}")
+    for subtask in tasks:
+        print(f"   [{subtask.task_id}] {subtask.title}")
         try:
-            ref = create_issue(repo, task["subject"], task_body(task), dry_run)
-            issue_map[task["id"]] = ref
+            ref = create_issue(repo, subtask.title, task_body(subtask), dry_run)
+            issue_map[subtask.task_id] = ref
             if not dry_run:
                 print(f"         → #{ref.number}")
         except RuntimeError as e:
             print(f"         FAILED: {e}")
-            failures.append(f"create issue for task {task['id']}: {e}")
+            failures.append(f"create issue for task {subtask.task_id}: {e}")
 
     # 3. Link sub-issues to parent
     print("\n── Linking sub-issues to parent")
-    for task in data["tasks"]:
-        entry = issue_map.get(task["id"])
+    for subtask in tasks:
+        entry = issue_map.get(subtask.task_id)
         if entry is None:
             continue
         try:
             add_sub_issue(repo, parent.number, entry.database_id, entry.number, dry_run)
         except RuntimeError as e:
             print(f"   FAILED: {e}")
-            failures.append(f"sub-issue link for task {task['id']}: {e}")
+            failures.append(f"sub-issue link for task {subtask.task_id}: {e}")
 
     # 4. Wire blocked-by edges
-    dep_edges = [
-        (task["id"], dep) for task in data["tasks"] for dep in task.get("dependencies", [])
-    ]
+    dep_edges = [(subtask.task_id, dep) for subtask in tasks for dep in subtask.blocked_by]
     if dep_edges:
         print("\n── Adding blocked-by relationships")
         for blocked_id, blocking_id in dep_edges:
@@ -232,10 +243,10 @@ def run_sync(data: dict, repo: str, dry_run: bool, skip_label: bool = False) -> 
     print("\n── Summary")
     if not dry_run:
         print(f"   Parent issue: https://github.com/{repo}/issues/{parent.number}")
-        for task in data["tasks"]:
-            entry = issue_map.get(task["id"])
+        for subtask in tasks:
+            entry = issue_map.get(subtask.task_id)
             if entry:
-                print(f"   [{task['id']}] {task['subject'][:60]} → #{entry.number}")
+                print(f"   [{subtask.task_id}] {subtask.title[:60]} → #{entry.number}")
     if failures:
         print(f"\n   {len(failures)} failure(s):")
         for f in failures:
@@ -243,23 +254,6 @@ def run_sync(data: dict, repo: str, dry_run: bool, skip_label: bool = False) -> 
         return 1
     print("   All steps completed successfully.")
     return 0
-
-
-def validate(data: dict) -> None:
-    if not isinstance(data.get("title"), str):
-        raise ValueError('Input JSON must have a "title" string field.')
-    if not data.get("tasks"):
-        raise ValueError('Input JSON must have a non-empty "tasks" array.')
-    for task in data["tasks"]:
-        if not task.get("id"):
-            raise ValueError(f'Task missing "id": {task}')
-        if not task.get("subject"):
-            raise ValueError(f'Task {task["id"]} missing "subject".')
-    ids = {t["id"] for t in data["tasks"]}
-    for task in data["tasks"]:
-        for dep in task.get("dependencies", []):
-            if dep not in ids:
-                raise ValueError(f'Task {task["id"]} has unknown dependency "{dep}".')
 
 
 @click.command()
@@ -290,11 +284,16 @@ def sync(
         data = json.loads(sys.stdin.read())
 
     try:
-        validate(data)
+        task_list = SubtaskList.model_validate(data)
+    except pydantic.ValidationError as e:
+        raise click.ClickException(f"Invalid task JSON: {e}")
+
+    try:
+        validate(task_list)
     except ValueError as e:
         raise click.ClickException(str(e))
 
     resolved_repo = resolve_repo(repo, dry_run)
-    exit_code = run_sync(data, resolved_repo, dry_run, skip_label=no_in_progress_label)
+    exit_code = run_sync(task_list, resolved_repo, dry_run, skip_label=no_in_progress_label)
     if exit_code != 0:
         raise SystemExit(exit_code)

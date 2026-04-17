@@ -72,7 +72,7 @@ markdown plan
     │
     │  shipyard tasks
     ▼
-tasks.json  { title, body, tasks[{id, subject, description, status, dependencies}] }
+tasks.json  { title, description, tasks: {id: {task_id, title, description, status, blocked_by}} }
     │
     │  shipyard sync  (gh CLI)
     ▼

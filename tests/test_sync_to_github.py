@@ -15,6 +15,7 @@ from shipyard.commands.sync import (
     task_body,
     validate,
 )
+from shipyard.schemas import Subtask, SubtaskList
 
 # ---------------------------------------------------------------------------
 # gh helper
@@ -179,37 +180,39 @@ def test_ensure_label_exists_creates_if_absent(mock_gh):
 
 
 def test_task_body_pending():
-    task = {"description": "Do X", "status": "pending", "dependencies": []}
-    body = task_body(task)
+    subtask = Subtask(task_id="1", title="X", description="Do X", status="pending")
+    body = task_body(subtask)
     assert "⬜" in body
     assert "Do X" in body
 
 
 def test_task_body_in_progress():
-    task = {"description": "Doing Y", "status": "in_progress", "dependencies": []}
-    assert "🔄" in task_body(task)
+    subtask = Subtask(task_id="1", title="X", description="Doing Y", status="in_progress")
+    assert "🔄" in task_body(subtask)
 
 
 def test_task_body_completed():
-    task = {"description": "Done Z", "status": "completed", "dependencies": []}
-    assert "✅" in task_body(task)
+    subtask = Subtask(task_id="1", title="X", description="Done Z", status="completed")
+    assert "✅" in task_body(subtask)
 
 
 def test_task_body_with_deps():
-    task = {"description": "Do Y", "status": "pending", "dependencies": ["1", "3"]}
-    body = task_body(task)
+    subtask = Subtask(
+        task_id="2", title="X", description="Do Y", status="pending", blocked_by={"1", "3"}
+    )
+    body = task_body(subtask)
     assert "1, 3" in body
 
 
 def test_task_body_no_description():
-    task = {"status": "pending", "dependencies": []}
-    body = task_body(task)
+    subtask = Subtask(task_id="1", title="X", description="", status="pending")
+    body = task_body(subtask)
     assert "pending" in body
 
 
 def test_task_body_unknown_status_defaults_to_pending_emoji():
-    task = {"description": "X", "status": "mystery", "dependencies": []}
-    assert "⬜" in task_body(task)
+    subtask = Subtask(task_id="1", title="X", description="X", status="mystery")
+    assert "⬜" in task_body(subtask)
 
 
 # ---------------------------------------------------------------------------
@@ -217,48 +220,33 @@ def test_task_body_unknown_status_defaults_to_pending_emoji():
 # ---------------------------------------------------------------------------
 
 
-def _valid_data(**overrides) -> dict:
-    base = {
+def _minimal_task_list(**overrides: object) -> SubtaskList:
+    defaults: dict = {
         "title": "My Plan",
-        "tasks": [
-            {"id": "1", "subject": "Task A", "description": "Do A", "dependencies": []},
-        ],
+        "description": "Goal.",
+        "tasks": {
+            "1": Subtask(task_id="1", title="Task A", description="Do A"),
+        },
     }
-    base.update(overrides)
-    return base
+    defaults.update(overrides)
+    return SubtaskList(**defaults)
 
 
 def test_validate_passes_on_valid_input():
-    validate(_valid_data())  # should not raise
-
-
-def test_validate_raises_on_missing_title():
-    with pytest.raises(ValueError, match="title"):
-        validate({"tasks": [{"id": "1", "subject": "x", "dependencies": []}]})
+    validate(_minimal_task_list())
 
 
 def test_validate_raises_on_empty_tasks():
     with pytest.raises(ValueError, match="tasks"):
-        validate({"title": "T", "tasks": []})
-
-
-def test_validate_raises_on_task_missing_id():
-    with pytest.raises(ValueError, match='"id"'):
-        validate({"title": "T", "tasks": [{"subject": "x", "dependencies": []}]})
-
-
-def test_validate_raises_on_task_missing_subject():
-    with pytest.raises(ValueError, match='"subject"'):
-        validate({"title": "T", "tasks": [{"id": "1", "dependencies": []}]})
+        validate(_minimal_task_list(tasks={}))
 
 
 def test_validate_raises_on_unknown_dependency():
-    data = {
-        "title": "T",
-        "tasks": [{"id": "1", "subject": "A", "dependencies": ["99"]}],
+    tasks = {
+        "1": Subtask(task_id="1", title="A", description="Do A", blocked_by={"99"}),
     }
     with pytest.raises(ValueError, match="unknown dependency"):
-        validate(data)
+        validate(_minimal_task_list(tasks=tasks))
 
 
 # ---------------------------------------------------------------------------
@@ -266,27 +254,13 @@ def test_validate_raises_on_unknown_dependency():
 # ---------------------------------------------------------------------------
 
 
-def _minimal_plan(*, with_deps: bool = False) -> dict:
-    tasks = [
-        {
-            "id": "1",
-            "subject": "Task A",
-            "description": "Do A.",
-            "status": "pending",
-            "dependencies": [],
-        },
-    ]
+def _minimal_plan(*, with_deps: bool = False) -> SubtaskList:
+    tasks = {
+        "1": Subtask(task_id="1", title="Task A", description="Do A."),
+    }
     if with_deps:
-        tasks.append(
-            {
-                "id": "2",
-                "subject": "Task B",
-                "description": "Do B.",
-                "status": "pending",
-                "dependencies": ["1"],
-            },
-        )
-    return {"title": "My Plan", "body": "Goal.", "tasks": tasks}
+        tasks["2"] = Subtask(task_id="2", title="Task B", description="Do B.", blocked_by={"1"})
+    return SubtaskList(title="My Plan", description="Goal.", tasks=tasks)
 
 
 def test_run_sync_dry_run_succeeds(capsys):
@@ -314,12 +288,25 @@ def test_run_sync_parent_creation_failure_returns_1(mock_create, capsys):
 # ---------------------------------------------------------------------------
 
 
+def _minimal_plan_json(*, with_deps: bool = False) -> str:
+    tasks = {
+        "1": {"task_id": "1", "title": "Task A", "description": "Do A.", "blocked_by": []},
+    }
+    if with_deps:
+        tasks["2"] = {
+            "task_id": "2",
+            "title": "Task B",
+            "description": "Do B.",
+            "blocked_by": ["1"],
+        }
+    return json.dumps({"title": "My Plan", "description": "Goal.", "tasks": tasks})
+
+
 def test_sync_cli_dry_run_from_stdin():
     from shipyard.commands.sync import sync
 
-    data = json.dumps(_minimal_plan())
     runner = CliRunner()
-    result = runner.invoke(sync, ["--dry-run", "--repo", "owner/repo"], input=data)
+    result = runner.invoke(sync, ["--dry-run", "--repo", "owner/repo"], input=_minimal_plan_json())
     assert result.exit_code == 0
 
 
@@ -334,7 +321,7 @@ def test_sync_cli_invalid_json_raises():
 def test_sync_cli_validation_error_shown():
     from shipyard.commands.sync import sync
 
-    data = json.dumps({"title": "T", "tasks": []})
+    data = json.dumps({"title": "T", "description": "D", "tasks": {}})
     runner = CliRunner()
     result = runner.invoke(sync, ["--dry-run"], input=data)
     assert result.exit_code != 0
@@ -345,7 +332,7 @@ def test_sync_cli_file_input(tmp_path):
     from shipyard.commands.sync import sync
 
     f = tmp_path / "tasks.json"
-    f.write_text(json.dumps(_minimal_plan()))
+    f.write_text(_minimal_plan_json())
     runner = CliRunner()
     result = runner.invoke(sync, ["--dry-run", "--repo", "owner/repo", "--input", str(f)])
     assert result.exit_code == 0

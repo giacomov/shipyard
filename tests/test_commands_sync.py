@@ -7,16 +7,15 @@ from shipyard.commands.sync import sync
 
 SAMPLE_DATA = {
     "title": "My Epic",
-    "body": "Goal.",
-    "tasks": [
-        {
-            "id": "1",
-            "subject": "Task A",
+    "description": "Goal.",
+    "tasks": {
+        "1": {
+            "task_id": "1",
+            "title": "Task A",
             "description": "Do A.",
-            "status": "pending",
-            "dependencies": [],
+            "blocked_by": [],
         }
-    ],
+    },
 }
 
 

@@ -56,24 +56,26 @@ Output of `shipyard tasks`. This is also the input format for `shipyard sync`.
 
 ```json
 {
-  "title": "string — from the # heading",
-  "body": "string — from **Goal:**",
-  "tasks": [
-    {
-      "id": "string — the task number as a string (e.g. \"1\")",
-      "subject": "string — the title after 'Task N:'",
-      "description": "string — full task body without header/depends-on lines",
+  "title": "string — from the --title flag",
+  "description": "string — full content of the input markdown plan",
+  "tasks": {
+    "1": {
+      "task_id": "string — the task number as a string (e.g. \"1\")",
+      "title": "string — task title",
+      "description": "string — task description",
       "status": "string — always \"pending\" from the parser",
-      "dependencies": ["string"] // task ids, e.g. ["1", "3"]
+      "blocked_by": ["string"]
     }
-  ]
+  }
 }
 ```
 
 **Field notes:**
-- `id` is a string, not an integer (`"1"` not `1`).
-- `dependencies` contains string ids, not issue numbers.
+- `tasks` is a dict keyed by `task_id`, not an array.
+- `task_id` is a string, not an integer (`"1"` not `1`).
+- `blocked_by` is a list of `task_id` strings referencing other tasks.
 - `status` is always `"pending"` when output by `shipyard tasks`; it is informational and not used by `shipyard sync`.
+- `description` at the top level contains the full markdown plan content.
 
 ## Work JSON Schema
 
@@ -141,29 +143,29 @@ Implement the main feature using the scaffold from Task 1.
 ### 2. JSON (`tasks.json`)
 
 ```bash
-shipyard tasks -i plan.md
+shipyard tasks -i plan.md --title "Sample Feature Implementation Plan"
 ```
 
 ```json
 {
   "title": "Sample Feature Implementation Plan",
-  "body": "Build something simple for testing the parser.",
-  "tasks": [
-    {
-      "id": "1",
-      "subject": "Setup",
+  "description": "# Sample Feature Implementation Plan\n\n**Goal:** Build something simple ...",
+  "tasks": {
+    "1": {
+      "task_id": "1",
+      "title": "Setup",
       "description": "Create the project scaffold.\n\n- [ ] **Step 1: Write the test**\n...",
       "status": "pending",
-      "dependencies": []
+      "blocked_by": []
     },
-    {
-      "id": "2",
-      "subject": "Implementation",
+    "2": {
+      "task_id": "2",
+      "title": "Implementation",
       "description": "Implement the main feature using the scaffold from Task 1.\n...",
       "status": "pending",
-      "dependencies": ["1"]
+      "blocked_by": ["1"]
     }
-  ]
+  }
 }
 ```
 

@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any
 
 import click
-import pydantic
 from claude_agent_sdk import (
     AssistantMessage,
     ClaudeAgentOptions,
@@ -23,29 +22,9 @@ from claude_agent_sdk import (
     tool,
 )
 
+from shipyard.schemas import Subtask, SubtaskList
 from shipyard.settings import settings
 from shipyard.utils.agent import report_results
-
-
-class Subtask(pydantic.BaseModel):
-    task_id: str
-    title: str
-    description: str
-    blocked_by: set[str] = set()
-
-
-class SubtaskList(pydantic.BaseModel):
-    title: str
-    description: str
-    tasks: dict[str, Subtask] = {}
-    committed: bool = False
-    drafting: bool = True
-
-    @pydantic.field_serializer("description")
-    def truncate_description(self, v: str, info) -> str:
-        if info.context and info.context.get("truncate"):
-            return v[:50] + "..." if len(v) > 50 else v
-        return v
 
 
 async def receive_from_client(client: ClaudeSDKClient):
@@ -249,7 +228,11 @@ async def _run_task_agent(prompt: str, cwd: str, task_list: SubtaskList) -> None
         for _ in range(5):
             # Here we should have a completed task list. Let's give it back to the model and ask for
             # review and confirmation
-            graph = task_list.model_dump_json(indent=4, context={"truncate": True})
+            graph = task_list.model_dump_json(
+                indent=4,
+                exclude={"committed", "drafting"},
+                context={"truncate": True},
+            )
 
             task_list.drafting = False
             task_list.committed = False
@@ -332,6 +315,6 @@ def tasks(input_file: str, output_file: str | None, title: str) -> None:
 
     # Save the tasks to the outfile
     with open(output_file or settings.tasks_output_file, "w+") as f:
-        f.write(task_list.model_dump_json(indent=4))
+        f.write(task_list.model_dump_json(indent=4, exclude={"committed", "drafting"}))
 
     click.echo(f"Saved {len(task_list.tasks)} tasks to {output_file or settings.tasks_output_file}")

@@ -5,34 +5,39 @@ from unittest.mock import patch
 from click.testing import CliRunner
 
 from shipyard.commands.tasks import tasks
+from shipyard.schemas import Subtask, SubtaskList
 
-FIXTURES = Path(__file__).parent / "fixtures"
 
-_FAKE_TASKS = [
-    {"id": "1", "subject": "Alpha", "description": "Do alpha.", "blockedBy": []},
-    {"id": "2", "subject": "Beta", "description": "Do beta.", "blockedBy": ["1"]},
-]
+async def _fake_run_task_agent(prompt: str, cwd: str, task_list: SubtaskList) -> None:
+    task_list.tasks["1"] = Subtask(task_id="1", title="Alpha", description="Do alpha.")
+    task_list.tasks["2"] = Subtask(
+        task_id="2", title="Beta", description="Do beta.", blocked_by={"1"}
+    )
+
+
+async def _fake_run_task_agent_empty(prompt: str, cwd: str, task_list: SubtaskList) -> None:
+    pass
 
 
 def test_tasks_reads_file_and_outputs_json(tmp_path: Path) -> None:
     runner = CliRunner()
     plan_file = tmp_path / "plan.md"
     plan_file.write_text("# My Plan\n\nSome plan content.\n")
+    out_file = tmp_path / "tasks.json"
 
-    with (
-        patch("shipyard.commands.tasks.asyncio.run"),
-        patch("shipyard.commands.tasks._load_task_files", return_value=_FAKE_TASKS),
-    ):
-        result = runner.invoke(tasks, ["-i", str(plan_file), "--title", "My Epic"])
+    with patch("shipyard.commands.tasks._run_task_agent", new=_fake_run_task_agent):
+        result = runner.invoke(
+            tasks, ["-i", str(plan_file), "-o", str(out_file), "--title", "My Epic"]
+        )
 
     assert result.exit_code == 0, result.output
-    data = json.loads(result.output)
+    data = json.loads(out_file.read_text())
     assert data["title"] == "My Epic"
-    assert data["body"] == ""
-    assert len(data["tasks"]) == 2
-    assert data["tasks"][0]["subject"] == "Alpha"
-    assert data["tasks"][0]["status"] == "pending"
-    assert data["tasks"][1]["dependencies"] == ["1"]
+    assert data["description"] == "# My Plan\n\nSome plan content.\n"
+    assert "1" in data["tasks"]
+    assert data["tasks"]["1"]["title"] == "Alpha"
+    assert data["tasks"]["1"]["blocked_by"] == []
+    assert sorted(data["tasks"]["2"]["blocked_by"]) == ["1"]
 
 
 def test_tasks_writes_output_file(tmp_path: Path) -> None:
@@ -41,10 +46,7 @@ def test_tasks_writes_output_file(tmp_path: Path) -> None:
     plan_file.write_text("# P\n\nDesc.\n")
     out = tmp_path / "out.json"
 
-    with (
-        patch("shipyard.commands.tasks.asyncio.run"),
-        patch("shipyard.commands.tasks._load_task_files", return_value=_FAKE_TASKS),
-    ):
+    with patch("shipyard.commands.tasks._run_task_agent", new=_fake_run_task_agent):
         result = runner.invoke(tasks, ["-i", str(plan_file), "-o", str(out), "--title", "Epic"])
 
     assert result.exit_code == 0
@@ -52,36 +54,19 @@ def test_tasks_writes_output_file(tmp_path: Path) -> None:
     assert "tasks" in data
 
 
-def test_tasks_exits_nonzero_when_agent_creates_no_tasks(tmp_path: Path) -> None:
+def test_tasks_output_excludes_internal_fields(tmp_path: Path) -> None:
     runner = CliRunner()
     plan_file = tmp_path / "plan.md"
     plan_file.write_text("# P\n\nDesc.\n")
+    out = tmp_path / "out.json"
 
-    with (
-        patch("shipyard.commands.tasks.asyncio.run"),
-        patch("shipyard.commands.tasks._load_task_files", return_value=[]),
-    ):
-        result = runner.invoke(tasks, ["-i", str(plan_file), "--title", "Epic"])
+    with patch("shipyard.commands.tasks._run_task_agent", new=_fake_run_task_agent):
+        result = runner.invoke(tasks, ["-i", str(plan_file), "-o", str(out), "--title", "Epic"])
 
-    assert result.exit_code != 0
-
-
-def test_tasks_exits_nonzero_on_bad_dependency(tmp_path: Path) -> None:
-    runner = CliRunner()
-    plan_file = tmp_path / "plan.md"
-    plan_file.write_text("# P\n\nDesc.\n")
-
-    bad_tasks = [
-        {"id": "1", "subject": "A", "description": "Desc.", "blockedBy": ["99"]},
-    ]
-
-    with (
-        patch("shipyard.commands.tasks.asyncio.run"),
-        patch("shipyard.commands.tasks._load_task_files", return_value=bad_tasks),
-    ):
-        result = runner.invoke(tasks, ["-i", str(plan_file), "--title", "Epic"])
-
-    assert result.exit_code != 0
+    assert result.exit_code == 0
+    data = json.loads(out.read_text())
+    assert "committed" not in data
+    assert "drafting" not in data
 
 
 def test_tasks_requires_title(tmp_path: Path) -> None:
@@ -91,24 +76,3 @@ def test_tasks_requires_title(tmp_path: Path) -> None:
 
     result = runner.invoke(tasks, ["-i", str(plan_file)])
     assert result.exit_code != 0
-
-
-def test_tasks_sets_env_var_before_agent(tmp_path: Path) -> None:
-    runner = CliRunner()
-    plan_file = tmp_path / "plan.md"
-    plan_file.write_text("# P\n\nDesc.\n")
-
-    captured_env: list[str | None] = []
-
-    def fake_run(coro):  # type: ignore[no-untyped-def]
-        captured_env.append(os.environ.get("CLAUDE_CODE_TASK_LIST_ID"))
-
-    import os
-
-    with (
-        patch("shipyard.commands.tasks.asyncio.run", side_effect=fake_run),
-        patch("shipyard.commands.tasks._load_task_files", return_value=_FAKE_TASKS),
-    ):
-        runner.invoke(tasks, ["-i", str(plan_file), "--title", "Epic"])
-
-    assert captured_env[0] is not None
