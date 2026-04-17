@@ -4,6 +4,7 @@
 import asyncio
 import json
 import os
+import textwrap
 from importlib.resources import files as _res_files
 from pathlib import Path
 from typing import Any
@@ -186,7 +187,8 @@ async def _run_task_agent(prompt: str, cwd: str, task_list: SubtaskList) -> None
 
         if not remove_blocked_by:
             click.echo(
-                f"Warning: No dependencies provided for unlinking from task {task_id}", err=True
+                f"Warning: No dependencies provided for unlinking from task {task_id}",
+                err=True,
             )
 
             return {
@@ -234,6 +236,22 @@ async def _run_task_agent(prompt: str, cwd: str, task_list: SubtaskList) -> None
         ],
         cwd=cwd,
         effort="max",
+        system_prompt={
+            "type": "preset",
+            "preset": "claude_code",
+            "append": textwrap.dedent(
+                """
+                Communication rules (always active):
+                - Drop articles: a, an, the
+                - Drop filler: just, really, basically, actually, simply
+                - Drop pleasantries: sure, certainly, of course, happy to
+                - Drop hedging: skip "it might be worth considering"
+                - Use fragments. No need full sentence.
+                - Short synonyms: big not extensive, fix not "implement a solution for"
+                - Technical terms stay exact. Code blocks unchanged. Error messages quoted exact.
+            """
+            ),
+        },
     )
 
     async with ClaudeSDKClient(options=options) as client:
