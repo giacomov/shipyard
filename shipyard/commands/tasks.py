@@ -236,6 +236,7 @@ async def _run_task_agent(prompt: str, cwd: str, task_list: SubtaskList) -> None
         cwd=cwd,
         effort="max",
         system_prompt={"type": "preset", "preset": "claude_code"},
+        setting_sources=["project"],
     )
 
     async with ClaudeSDKClient(options=options) as client:
