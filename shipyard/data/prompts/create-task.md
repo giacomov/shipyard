@@ -1,9 +1,5 @@
 Use this tool to create a structured task list that divides a plan into short, manageable chunks of work with dependencies.
 
-## When to Use This Tool
-
-Use this tool when asked to.
-
 ## Task Fields
 
 - **task_id**: a numeric ID for this task. Use ordered, increasing integers (first task has task_id="1", second task task_id="2", and so on)
