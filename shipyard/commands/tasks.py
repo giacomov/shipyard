@@ -57,7 +57,7 @@ async def receive_from_client(client: ClaudeSDKClient):
                         case TextBlock():
                             click.echo(f"[text] {block.text}")
                         case ToolUseBlock():
-                            click.echo(f"[tool] {block.name} {json.dumps(block.input)[:50]}...")
+                            click.echo(f"[tool] {block.name} {json.dumps(block.input)[:80]}...")
                         case ThinkingBlock():
                             click.echo(f"[thinking] {block.thinking}")
 
