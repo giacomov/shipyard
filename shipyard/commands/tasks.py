@@ -2,6 +2,7 @@
 """shipyard tasks — extract tasks from a markdown plan using an AI agent."""
 
 import asyncio
+import json
 import os
 from importlib.resources import files as _res_files
 from pathlib import Path
@@ -56,7 +57,7 @@ async def receive_from_client(client: ClaudeSDKClient):
                         case TextBlock():
                             click.echo(f"[text] {block.text}")
                         case ToolUseBlock():
-                            click.echo(f"[tool] {block.name}")
+                            click.echo(f"[tool] {block.name} {json.dumps(block.input)[:50]}...")
                         case ThinkingBlock():
                             click.echo(f"[thinking] {block.thinking}")
 
@@ -220,12 +221,8 @@ async def _run_task_agent(prompt: str, cwd: str, task_list: SubtaskList) -> None
         tools=[create_task, delete_task, link_tasks, unlink_tasks, commit],
     )
 
-    import pdb
-
-    pdb.set_trace()
-
     options = ClaudeAgentOptions(
-        permission_mode="bypassPermissions",
+        permission_mode="dontAsk",
         mcp_servers={"task_server": task_server},
         allowed_tools=[
             "Read",
@@ -260,9 +257,9 @@ async def _run_task_agent(prompt: str, cwd: str, task_list: SubtaskList) -> None
                 {graph}
                 ```
 
-                Please review these tasks and confirm that they are correct.
+                Please review these tasks implement the original plan.
 
-                If they are correct, please call the commit tool to confirm. Otherwise, fix it by calling the 
+                If they are correct, please call the commit tool to confirm. Otherwise, fix them by calling the 
                 available tools (like delete_task, unlink_tasks, create_task, link_tasks).
                 """
             )
