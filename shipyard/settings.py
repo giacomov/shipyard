@@ -12,11 +12,11 @@ class Settings(BaseSettings):
     epic_label_color: str = "0075ca"
     implementer_max_retries: int = 1
 
-    planning_model = "opus-4.6"
-    planning_effort = "high"
+    planning_model: str = "opus-4.6"
+    planning_effort: str = "high"
 
-    execution_model = "sonnet-4.6"
-    execution_effort = "high"
+    execution_model: str = "sonnet-4.6"
+    execution_effort: str = "high"
 
 
 settings = Settings()
