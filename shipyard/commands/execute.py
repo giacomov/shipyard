@@ -144,7 +144,7 @@ async def run_all_issues(
     *,
     reset_fn: Callable[[str], None] = lambda _: None,
     comment_fn: Callable[[str, int, str], None] = lambda *_: None,
-) -> dict[str, bool]:
+) -> None:
     """Run all tasks sequentially. Returns {task_id: success}."""
 
     for task in work.tasks.values():

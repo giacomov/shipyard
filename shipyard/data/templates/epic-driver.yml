@@ -74,9 +74,9 @@ jobs:
         run: uv tool install "git+https://github.com/giacomov/shipyard@SHIPYARD_VERSION"
 
       - name: Write work JSON to file
-        run: cat <<'WORK_EOF' > work.json
-          ${{ needs.find-work.outputs.work_json }}
-          WORK_EOF
+        env:
+          WORK_JSON: ${{ needs.find-work.outputs.work_json }}
+        run: python3 -c "import os; open('work.json','w').write(os.environ['WORK_JSON'])"
 
       - name: Create implementation branch
         run: |

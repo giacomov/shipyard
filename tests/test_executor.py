@@ -45,27 +45,25 @@ def test_close_issues_body_single():
 @pytest.mark.asyncio
 @patch("shipyard.commands.execute.run_issue_pipeline", new_callable=AsyncMock)
 @patch("shipyard.commands.execute.get_head_sha", return_value="abc")
-async def test_run_all_issues_returns_results_dict(mock_sha, mock_pipeline):
-    mock_pipeline.side_effect = [True, False]
+async def test_run_all_issues_calls_pipeline_for_each_task(mock_sha, mock_pipeline):
     from shipyard.commands.execute import run_all_issues
 
     tasks = [_task(task_id="1", title="A"), _task(task_id="2", title="B")]
     work = _work(tasks=tasks)
-    results = await run_all_issues(work)
-    assert results == {"1": True, "2": False}
+    await run_all_issues(work)
+    assert mock_pipeline.call_count == 2
 
 
 @pytest.mark.asyncio
 @patch("shipyard.commands.execute.run_issue_pipeline", new_callable=AsyncMock, return_value=True)
 @patch("shipyard.commands.execute.get_head_sha", return_value="abc")
-async def test_run_all_issues_all_success(mock_sha, mock_pipeline):
+async def test_run_all_issues_calls_pipeline_for_all_tasks(mock_sha, mock_pipeline):
     from shipyard.commands.execute import run_all_issues
 
     tasks = [_task(task_id=str(i), title=f"T{i}") for i in range(3)]
     work = _work(tasks=tasks)
-    results = await run_all_issues(work)
-    assert all(results.values())
-    assert len(results) == 3
+    await run_all_issues(work)
+    assert mock_pipeline.call_count == 3
 
 
 # ---------------------------------------------------------------------------
