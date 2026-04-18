@@ -1,3 +1,5 @@
+import json
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -43,15 +45,16 @@ def test_close_issues_body_single():
 
 
 @pytest.mark.asyncio
-@patch("shipyard.commands.execute.run_issue_pipeline", new_callable=AsyncMock)
+@patch("shipyard.commands.execute.run_issue_pipeline", new_callable=AsyncMock, return_value=True)
 @patch("shipyard.commands.execute.get_head_sha", return_value="abc")
 async def test_run_all_issues_calls_pipeline_for_each_task(mock_sha, mock_pipeline):
     from shipyard.commands.execute import run_all_issues
 
     tasks = [_task(task_id="1", title="A"), _task(task_id="2", title="B")]
     work = _work(tasks=tasks)
-    await run_all_issues(work)
+    results = await run_all_issues(work)
     assert mock_pipeline.call_count == 2
+    assert results == {"successful": ["1", "2"], "failed": []}
 
 
 @pytest.mark.asyncio
@@ -62,12 +65,47 @@ async def test_run_all_issues_calls_pipeline_for_all_tasks(mock_sha, mock_pipeli
 
     tasks = [_task(task_id=str(i), title=f"T{i}") for i in range(3)]
     work = _work(tasks=tasks)
-    await run_all_issues(work)
+    results = await run_all_issues(work)
     assert mock_pipeline.call_count == 3
+    assert results == {"successful": ["0", "1", "2"], "failed": []}
+
+
+@pytest.mark.asyncio
+@patch("shipyard.commands.execute.get_head_sha", return_value="abc")
+async def test_run_all_issues_tracks_failures(mock_sha):
+    from shipyard.commands.execute import run_all_issues
+
+    tasks = [_task(task_id=str(i), title=f"T{i}") for i in range(3)]
+    work = _work(tasks=tasks)
+
+    with patch(
+        "shipyard.commands.execute.run_issue_pipeline",
+        new_callable=AsyncMock,
+        side_effect=[True, False, True],
+    ):
+        results = await run_all_issues(work)
+
+    assert results == {"successful": ["0", "2"], "failed": ["1"]}
+
+
+@pytest.mark.asyncio
+@patch(
+    "shipyard.commands.execute.run_issue_pipeline",
+    new_callable=AsyncMock,
+    return_value=False,
+)
+@patch("shipyard.commands.execute.get_head_sha", return_value="abc")
+async def test_run_all_issues_all_fail(mock_sha, mock_pipeline):
+    from shipyard.commands.execute import run_all_issues
+
+    tasks = [_task(task_id="1", title="A"), _task(task_id="2", title="B")]
+    work = _work(tasks=tasks)
+    results = await run_all_issues(work)
+    assert results == {"successful": [], "failed": ["1", "2"]}
 
 
 # ---------------------------------------------------------------------------
-# execute command — env var guards
+# execute command
 # ---------------------------------------------------------------------------
 
 
@@ -80,3 +118,72 @@ def test_execute_command_missing_input_file():
     result = runner.invoke(execute)
     assert result.exit_code != 0
     assert "input" in result.output.lower() or "required" in result.output.lower()
+
+
+_WORK_JSON = json.dumps(
+    {
+        "epic_id": "42",
+        "title": "T",
+        "description": "",
+        "tasks": {
+            "5": {"task_id": "5", "title": "T5", "description": "", "blocked_by": []},
+            "6": {"task_id": "6", "title": "T6", "description": "", "blocked_by": []},
+        },
+    }
+)
+
+
+def _write_work(tmp_path: Any) -> str:
+    work_file = tmp_path / "work.json"
+    work_file.write_text(_WORK_JSON)
+    return str(work_file)
+
+
+@patch("shipyard.commands.execute.resolve_repo", return_value="owner/repo")
+@patch(
+    "shipyard.commands.execute.run_all_issues",
+    new_callable=AsyncMock,
+    return_value={"successful": ["5", "6"], "failed": []},
+)
+def test_execute_writes_results_file(mock_run, mock_repo, tmp_path: Any):
+    from click.testing import CliRunner
+
+    from shipyard.commands.execute import execute
+
+    work_file = _write_work(tmp_path)
+    results_path = tmp_path / "shipyard-results.json"
+
+    runner = CliRunner()
+    with patch("shipyard.commands.execute.settings") as mock_settings:
+        mock_settings.results_file = str(results_path)
+        result = runner.invoke(execute, ["-i", work_file])
+
+    assert result.exit_code == 0
+    assert results_path.exists()
+    data = json.loads(results_path.read_text())
+    assert data == {"successful": ["5", "6"], "failed": []}
+
+
+@patch("shipyard.commands.execute.resolve_repo", return_value="owner/repo")
+@patch(
+    "shipyard.commands.execute.run_all_issues",
+    new_callable=AsyncMock,
+    return_value={"successful": [], "failed": ["5", "6"]},
+)
+def test_execute_exits_nonzero_on_failure(mock_run, mock_repo, tmp_path: Any):
+    from click.testing import CliRunner
+
+    from shipyard.commands.execute import execute
+
+    work_file = _write_work(tmp_path)
+    results_path = tmp_path / "shipyard-results.json"
+
+    runner = CliRunner()
+    with patch("shipyard.commands.execute.settings") as mock_settings:
+        mock_settings.results_file = str(results_path)
+        result = runner.invoke(execute, ["-i", work_file])
+
+    assert result.exit_code == 1
+    assert results_path.exists()
+    data = json.loads(results_path.read_text())
+    assert data == {"successful": [], "failed": ["5", "6"]}
