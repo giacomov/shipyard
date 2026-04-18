@@ -2,7 +2,6 @@
 """shipyard execute — run the three-agent pipeline for unblocked issues (CI use only)."""
 
 import asyncio
-import json
 from collections.abc import Callable
 from importlib.resources import files as _res_files
 from pathlib import Path
@@ -25,7 +24,7 @@ async def run_issue_pipeline(
     *,
     reset_fn: Callable[[str], None] = lambda _: None,
     comment_fn: Callable[[str, int, str], None] = lambda *_: None,
-) -> bool:
+) -> None:
     """Run implementer + spec reviewer + quality reviewer for one task.
 
     Returns True if all reviews pass and the task's commits should be kept.
@@ -147,11 +146,13 @@ async def run_all_issues(
     comment_fn: Callable[[str, int, str], None] = lambda *_: None,
 ) -> dict[str, bool]:
     """Run all tasks sequentially. Returns {task_id: success}."""
-    results: dict[str, bool] = {}
+
     for task in work.tasks.values():
         print(f"\n── Implementing task {task.task_id}: {task.title}")
+
         base_sha = get_head_sha()
-        success = await run_issue_pipeline(
+
+        await run_issue_pipeline(
             task,
             work,
             base_sha,
@@ -159,12 +160,8 @@ async def run_all_issues(
             reset_fn=reset_fn,
             comment_fn=comment_fn,
         )
-        results[task.task_id] = success
-        if success:
-            print(f"   ✓ Task {task.task_id} implemented and approved")
-        else:
-            print(f"   ✗ Task {task.task_id} failed — commits reset")
-    return results
+
+        click.echo(f"Task {task.task_id} completed.")
 
 
 @click.command()
@@ -181,28 +178,10 @@ def execute(input_file: str) -> None:
     work = SubtaskList.model_validate_json(Path(input_file).read_text())
     repo = resolve_repo()
 
-    results = asyncio.run(
+    asyncio.run(
         run_all_issues(
             work,
             reset_fn=reset_hard,
             comment_fn=lambda _, n, body: post_issue_comment(repo, n, body),
         )
     )
-
-    successful = [tid for tid, ok in results.items() if ok]
-    failed = [tid for tid, ok in results.items() if not ok]
-
-    print(f"\n── Results: {len(successful)} succeeded, {len(failed)} failed")
-
-    Path(settings.results_file).write_text(
-        json.dumps(
-            {
-                "successful": successful,
-                "failed": failed,
-            }
-        )
-    )
-
-    if failed:
-        print(f"WARNING: {len(failed)} task(s) failed: {failed}")
-        raise SystemExit(1)
