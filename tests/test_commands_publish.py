@@ -8,39 +8,53 @@ from click.testing import CliRunner
 
 from shipyard.commands.publish import publish_execution
 
-_WORK_JSON = json.dumps({"repo": "owner/repo", "epic_number": 42, "epic_title": "T", "issues": []})
+_WORK_JSON = json.dumps(
+    {
+        "epic_id": "42",
+        "title": "T",
+        "description": "",
+        "tasks": {
+            "5": {"task_id": "5", "title": "T5", "description": "", "blocked_by": []},
+            "6": {"task_id": "6", "title": "T6", "description": "", "blocked_by": []},
+        },
+    }
+)
 
 
-def _write_results(tmp_path: Any, successful: list[int], failed: list[int] | None = None) -> str:
+def _write_work(tmp_path: Any) -> str:
+    work_file = tmp_path / "work.json"
+    work_file.write_text(_WORK_JSON)
+    return str(work_file)
+
+
+def _write_results(tmp_path: Any, successful: list[str], failed: list[str] | None = None) -> str:
     results_file = tmp_path / "shipyard-results.json"
     results_file.write_text(json.dumps({"successful": successful, "failed": failed or []}))
     return str(results_file)
 
 
 # ---------------------------------------------------------------------------
-# Missing WORK_JSON
+# Missing input file
 # ---------------------------------------------------------------------------
 
 
-def test_publish_missing_work_json(monkeypatch: Any, tmp_path: Any) -> None:
-    monkeypatch.delenv("WORK_JSON", raising=False)
-    results_file = _write_results(tmp_path, [1, 2])
+def test_publish_missing_input_file(tmp_path: Any) -> None:
+    results_file = _write_results(tmp_path, ["1", "2"])
 
     runner = CliRunner()
     result = runner.invoke(
         publish_execution, ["--branch", "my-branch", "--results-file", results_file]
     )
     assert result.exit_code != 0
-    assert "WORK_JSON" in result.output
 
 
 # ---------------------------------------------------------------------------
-# No successful issues — skip push and PR
+# No successful tasks — skip push and PR
 # ---------------------------------------------------------------------------
 
 
-def test_publish_no_successful_issues(monkeypatch: Any, tmp_path: Any) -> None:
-    monkeypatch.setenv("WORK_JSON", _WORK_JSON)
+def test_publish_no_successful_tasks(tmp_path: Any) -> None:
+    work_file = _write_work(tmp_path)
     results_file = _write_results(tmp_path, [])
 
     runner = CliRunner()
@@ -49,7 +63,8 @@ def test_publish_no_successful_issues(monkeypatch: Any, tmp_path: Any) -> None:
         patch("shipyard.commands.publish.create_pull_request") as mock_pr,
     ):
         result = runner.invoke(
-            publish_execution, ["--branch", "my-branch", "--results-file", results_file]
+            publish_execution,
+            ["--branch", "my-branch", "-i", work_file, "--results-file", results_file],
         )
 
     assert result.exit_code == 0
@@ -59,13 +74,13 @@ def test_publish_no_successful_issues(monkeypatch: Any, tmp_path: Any) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Successful issues — push and create PR
+# Successful tasks — push and create PR
 # ---------------------------------------------------------------------------
 
 
-def test_publish_pushes_and_creates_pr(monkeypatch: Any, tmp_path: Any) -> None:
-    monkeypatch.setenv("WORK_JSON", _WORK_JSON)
-    results_file = _write_results(tmp_path, [5, 6])
+def test_publish_pushes_and_creates_pr(tmp_path: Any) -> None:
+    work_file = _write_work(tmp_path)
+    results_file = _write_results(tmp_path, ["5", "6"])
 
     runner = CliRunner()
     with (
@@ -74,9 +89,11 @@ def test_publish_pushes_and_creates_pr(monkeypatch: Any, tmp_path: Any) -> None:
             "shipyard.commands.publish.create_pull_request",
             return_value="https://github.com/owner/repo/pull/99",
         ) as mock_pr,
+        patch("shipyard.commands.publish.resolve_repo", return_value="owner/repo"),
     ):
         result = runner.invoke(
-            publish_execution, ["--branch", "my-branch", "--results-file", results_file]
+            publish_execution,
+            ["--branch", "my-branch", "-i", work_file, "--results-file", results_file],
         )
 
     assert result.exit_code == 0

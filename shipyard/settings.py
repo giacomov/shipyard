@@ -20,5 +20,8 @@ class Settings(BaseSettings):
     execution_model: str = "sonnet"
     execution_effort: Literal["low", "medium", "high"] = "high"
 
+    review_model: str = "sonnet"
+    review_effort: Literal["low", "medium", "high"] = "high"
+
 
 settings = Settings()

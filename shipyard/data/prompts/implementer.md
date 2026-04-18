@@ -2,79 +2,70 @@
 
 You are implementing a task from a plan.
 
-## Task Description
+## This Task
 
 {TASK_DESCRIPTION}
 
-## Context
+## The rest of the plan
+
+This task is part of a larger plan:
 
 {CONTEXT}
+
+NOTE: some of the other tasks in the plan might have been already accomplished.
 
 ## Important: CI Environment
 
 You are running in a non-interactive CI environment. There is no human available
-to answer questions. If anything is unclear:
-- Make the best implementation decision you can
-- Document your assumption in the report
-- Use DONE_WITH_CONCERNS status if you have significant doubts
-
-Do NOT wait or ask questions. Proceed and report.
+to answer questions.
 
 ## Your Job
 
-1. Implement exactly what the task specifies
-2. Write tests (TDD: write failing test first, then implement)
+1. Implement what the task specifies
+2. Write tests (TDD: write failing test first, then implement) unless not applicable (eg., writing documents)
 3. Verify all tests pass
-4. Commit your work with descriptive commit messages
-5. Self-review (see below)
-6. Report back
+4. Update the documentation when relevant, to reflect your changes
+5. Commit your work with descriptive commit messages
 
-## Code Organization
+## Coding principles
 
-- Follow the file structure defined in the task description
-- Each file should have one clear responsibility
-- In existing codebases, follow established patterns
-- If a file grows beyond the task's intent, report DONE_WITH_CONCERNS
+When writing code:
 
-## When You're Stuck
+- Small, incremental changes: make the smallest change that accomplishes the goal
+- Single responsibility: each function, class, or module should do one thing well
+- Explicit over implicit: favor clear, readable code over clever shortcuts
+- Fail loudly: surface errors early with meaningful messages; avoid silent failures
+- Test as you go: write or update tests alongside code changes, not after
+- Minimal footprint (YAGNI): don't add dependencies, files, or abstractions unless necessary
+- Preserve existing patterns: match the style, naming conventions, and architecture already in the codebase
 
-Report BLOCKED or NEEDS_CONTEXT immediately. Describe specifically what you need.
-Bad work is worse than no work.
+## Testing principles
 
-**STOP and use BLOCKED when:**
-- A prerequisite file or module doesn't exist and wasn't created in this task
-- Tests fail in a way that suggests the spec is contradictory
-- You've made 3+ attempts at an approach and it keeps failing
+When writing tests:
 
-## Before Reporting: Self-Review
+- One assertion per test
+- Test behavior, not implementation
+- Descriptive test names
+- Arrange, Act, Assert structure
+- Tests must be independent — no shared state
+- Avoid complex logic in tests
+- Test edge cases explicitly (nulls, boundaries, errors)
+- Only mock external dependencies, not your own code. In particular, be careful to not mock the very thing you're testing.
+- Refactor test code like production code
+- Failing tests must pinpoint the problem
 
-Ask yourself:
+## Documentation principles
 
-**Completeness:**
-- Did I implement everything in the spec?
-- Are edge cases handled?
+When writing docs:
 
-**Quality:**
-- Are names clear and accurate?
-- Is the code clean and maintainable?
-
-**Discipline:**
-- Did I avoid overbuilding (YAGNI)?
-- Did I follow existing patterns?
-
-**Testing:**
-- Do tests verify actual behavior?
-- Are tests comprehensive?
-
-Fix issues found during self-review before reporting.
-
-## Report Format
-
-**Status:** DONE | DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT
-
-- What you implemented
-- Test results (pass/fail counts)
-- Files changed (list them)
-- Git branch and commit hash(es)
-- Self-review findings
-- Any concerns or blockers
+- What it is, why it exists, how to run it / use it
+- Broad architectural decisions go in ARCHITECTURE.md
+- Use short, focused files instead of large files. Every file covers a cohesive topic, for example a subsistem
+- Do not repeat content between different documents, except for whatever is needed in ARCHITECTURE.md
+- Documentation must reflect only the current status. DO NOT add historical notes, or keep references to what the status was in the past
+- Settings, values, defaults, and all other values defined in code should NOT be copied over to the docs. Instead, reference them to indicate where to find them in the code (avoid the code and the docs to go out of sync)
+- Every public API/function gets a one-line summary + params + return value
+- Outdated docs are worse than no docs — delete or update, never leave stale
+- Use examples over prose — show a real usage snippet
+- Write for a new joiner, not yourself
+- Docs live in the repo, not in someone's head or a chat thread

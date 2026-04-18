@@ -80,7 +80,7 @@ GitHub Issues  (epic + sub-issues + blocked-by edges + in-progress label)
     │
     │  epic-driver.yml  (triggered by label / PR merge / dispatch)
     ▼
-work_json  { epic_number, epic_title, epic_body, repo, issues[{number, title, body}] }
+work_json  SubtaskList { epic_id, title, description, tasks: {id → Subtask} }
     │
     │  shipyard execute  (claude-agent-sdk)
     ▼

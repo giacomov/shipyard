@@ -3,275 +3,194 @@
 
 import asyncio
 import json
-import os
-import re
 from collections.abc import Callable
-from dataclasses import dataclass
-from enum import Enum
 from importlib.resources import files as _res_files
 from pathlib import Path
 
 import click
-from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, TextBlock, query
+from claude_agent_sdk import AgentDefinition, ClaudeAgentOptions, ClaudeSDKClient
 
+from shipyard.schemas import Subtask, SubtaskList
 from shipyard.settings import settings
-from shipyard.utils.agent import report_results
-from shipyard.utils.gh import post_issue_comment
+from shipyard.utils.agent import receive_from_client
+from shipyard.utils.gh import post_issue_comment, resolve_repo
 from shipyard.utils.git import get_head_sha, reset_hard
-
-_PROMPTS = _res_files("shipyard.data.prompts")
-
-
-class ImplementerStatus(str, Enum):
-    DONE = "DONE"
-    DONE_WITH_CONCERNS = "DONE_WITH_CONCERNS"
-    BLOCKED = "BLOCKED"
-    NEEDS_CONTEXT = "NEEDS_CONTEXT"
-
-
-@dataclass
-class IssueWork:
-    number: int
-    title: str
-    body: str
-
-
-@dataclass
-class WorkSpec:
-    epic_number: int
-    epic_title: str
-    epic_body: str
-    repo: str
-    issues: list[IssueWork]
-
-
-# ---------------------------------------------------------------------------
-# Parsing helpers
-# ---------------------------------------------------------------------------
-
-
-def parse_implementer_status(output: str) -> ImplementerStatus:
-    """Extract status from implementer output. Defaults to BLOCKED if not found.
-
-    Longer/more-specific enum values are checked first to avoid substring collisions
-    (e.g. DONE_WITH_CONCERNS must be matched before DONE).
-    """
-    sorted_statuses = sorted(ImplementerStatus, key=lambda s: len(s.value), reverse=True)
-    for line in reversed(output.splitlines()):
-        stripped = line.strip().upper()
-        for status in sorted_statuses:
-            if status.value in stripped:
-                return status
-    return ImplementerStatus.BLOCKED
-
-
-def parse_review_verdict(output: str) -> bool:
-    """Return True only if output contains the standalone token APPROVED."""
-    upper = output.upper()
-    if "CHANGES_REQUESTED" in upper:
-        return False
-    return bool(re.search(r"(?<!NOT )\bAPPROVED\b", upper))
-
-
-def format_prompt(template: str, **kwargs: str) -> str:
-    """Substitute {PLACEHOLDER} values in a prompt template."""
-    for key, value in kwargs.items():
-        template = template.replace(f"{{{key}}}", value)
-    return template
-
-
-# ---------------------------------------------------------------------------
-# Agent SDK
-# ---------------------------------------------------------------------------
-
-
-async def run_agent(prompt: str, options: ClaudeAgentOptions) -> str:
-    """Run an agent and return all text output concatenated."""
-    output_parts: list[str] = []
-    async for message in query(prompt=prompt, options=options):
-        report_results(message)
-        match message:
-            case AssistantMessage():
-                for block in message.content:
-                    match block:
-                        case TextBlock():
-                            output_parts.append(block.text)
-    return "\n".join(output_parts)
-
-
-def make_agent_options(cwd: str) -> ClaudeAgentOptions:
-    """Return ClaudeAgentOptions for CI agents (bypass all permissions)."""
-    return ClaudeAgentOptions(
-        permission_mode="bypassPermissions",
-        allowed_tools=["Bash", "Read", "Write", "Edit", "Glob", "Grep"],
-        cwd=cwd,
-    )
-
-
-# ---------------------------------------------------------------------------
-# Three-agent pipeline
-# ---------------------------------------------------------------------------
 
 
 async def run_issue_pipeline(
-    issue: IssueWork,
-    work: WorkSpec,
+    task: Subtask,
+    work: SubtaskList,
     base_sha: str,
     max_retries: int = 1,
     *,
     reset_fn: Callable[[str], None] = lambda _: None,
     comment_fn: Callable[[str, int, str], None] = lambda *_: None,
 ) -> bool:
-    """Run implementer + spec reviewer + quality reviewer for one issue.
+    """Run implementer + spec reviewer + quality reviewer for one task.
 
-    Returns True if all reviews pass and the issue's commits should be kept.
-    Returns False if the issue failed; in that case the git state is reset to base_sha.
+    Returns True if all reviews pass and the task's commits should be kept.
+    Returns False if the task failed; in that case the git state is reset to base_sha.
     """
-    cwd = os.getcwd()
-    implementer_tmpl = (_PROMPTS / "implementer.md").read_text(encoding="utf-8")
-    spec_tmpl = (_PROMPTS / "spec-reviewer.md").read_text(encoding="utf-8")
-    quality_tmpl = (_PROMPTS / "code-quality-reviewer.md").read_text(encoding="utf-8")
 
-    context = (
-        f"Repository: {work.repo}\nEpic: #{work.epic_number} — {work.epic_title}\n{work.epic_body}"
+    tasks_context = [
+        f"- **Task {t.task_id}: {t.title}** [current task]"
+        if t.task_id == task.task_id
+        else f"- Task {t.task_id}: {t.title}"
+        for t in work.tasks.values()
+    ]
+
+    task_description = f"Task {task.task_id}: {task.title}\n\n{task.description}"
+    context = f"Epic: {work.title}\n\n{tasks_context}"
+
+    implementer_prompt = (
+        _res_files("shipyard.data.prompts")
+        .joinpath("implementer.md")
+        .read_text()
+        .format(
+            TASK_DESCRIPTION=task_description,
+            CONTEXT=context,
+        )
     )
 
-    implementer_report = ""
-    for attempt in range(max_retries + 1):
-        # Build implementer prompt: on retry, append previous reviewer feedback
-        extra = ""
-        if attempt > 0 and implementer_report:
-            extra = f"\n\n## Reviewer Feedback (attempt {attempt})\n\n{implementer_report}"
-        prompt = format_prompt(
-            implementer_tmpl,
-            TASK_DESCRIPTION=issue.body,
-            CONTEXT=context + extra,
+    spec_reviewer_prompt = (
+        _res_files("shipyard.data.prompts")
+        .joinpath("spec-reviewer.md")
+        .read_text()
+        .format(
+            TASK_DESCRIPTION=task_description,
+            CONTEXT=context,
         )
-        implementer_report = await run_agent(prompt, make_agent_options(cwd))
-        status = parse_implementer_status(implementer_report)
+    )
 
-        if status in (ImplementerStatus.BLOCKED, ImplementerStatus.NEEDS_CONTEXT):
-            reset_fn(base_sha)
-            comment_fn(
-                work.repo,
-                issue.number,
-                f"<!-- shipyard-executor: {status.value} -->\n"
-                f"**Executor halted — implementer reported {status.value}**\n\n"
-                f"<details><summary>Agent output</summary>\n\n{implementer_report}\n\n</details>",
-            )
-            return False
-
-        # Spec review
-        spec_prompt = format_prompt(
-            spec_tmpl,
-            TASK_DESCRIPTION=issue.body,
-            IMPLEMENTER_REPORT=implementer_report,
-            BASE_SHA=base_sha,
+    code_quality_prompt = (
+        _res_files("shipyard.data.prompts")
+        .joinpath("code-quality-reviewer.md")
+        .read_text()
+        .format(
+            TASK_DESCRIPTION=task_description,
+            CONTEXT=context,
         )
-        spec_output = await run_agent(spec_prompt, make_agent_options(cwd))
-        spec_approved = parse_review_verdict(spec_output)
+    )
 
-        if not spec_approved:
-            if attempt < max_retries:
-                # Will retry implementer with spec feedback appended
-                implementer_report = f"Spec review feedback:\n{spec_output}"
-                reset_fn(base_sha)
-                continue
-            else:
-                reset_fn(base_sha)
-                comment_fn(
-                    work.repo,
-                    issue.number,
-                    f"<!-- shipyard-executor: SPEC_FAILED -->\n"
-                    f"**Spec compliance review failed after {max_retries + 1} attempt(s)**\n\n"
-                    f"<details><summary>Spec reviewer output</summary>\n\n{spec_output}\n\n</details>",
-                )
-                return False
+    options = ClaudeAgentOptions(
+        permission_mode="dontAsk",
+        allowed_tools=["Read", "Write", "Edit", "Bash", "Monitor", "Grep", "Glob", "Agent"],
+        system_prompt={"type": "preset", "preset": "claude_code"},
+        setting_sources=["project"],
+        model=settings.execution_model,
+        effort=settings.execution_effort,
+        agents={
+            "spec_reviewer": AgentDefinition(
+                description="Expert spec reviewer specialist. Verifies against the spec and provide feedback.",
+                prompt=spec_reviewer_prompt,
+                tools=["Read", "Grep", "Glob"],
+                model=settings.review_model,
+                effort=settings.review_effort,
+            ),
+            "code_quality_reviewer": AgentDefinition(
+                description="Expert code quality reviewer specialist. Reviews the code for quality and provide feedback.",
+                prompt=code_quality_prompt,
+                tools=["Read", "Grep", "Glob"],
+                model=settings.review_model,
+                effort=settings.review_effort,
+            ),
+        },
+    )
 
-        # Code quality review
-        quality_prompt = format_prompt(
-            quality_tmpl,
-            IMPLEMENTER_REPORT=implementer_report,
-            BASE_SHA=base_sha,
+    async with ClaudeSDKClient(options=options) as client:
+        # Implement
+        await client.query(implementer_prompt)
+
+        await receive_from_client(client)
+
+        await client.query(
+            "Now stage and commit your changes, without pushing yet. Make sure to include everything you changed."
         )
-        quality_output = await run_agent(quality_prompt, make_agent_options(cwd))
-        quality_approved = parse_review_verdict(quality_output)
 
-        if not quality_approved:
-            if attempt < max_retries:
-                implementer_report = f"Code quality review feedback:\n{quality_output}"
-                reset_fn(base_sha)
-                continue
-            else:
-                reset_fn(base_sha)
-                comment_fn(
-                    work.repo,
-                    issue.number,
-                    f"<!-- shipyard-executor: QUALITY_FAILED -->\n"
-                    f"**Code quality review failed after {max_retries + 1} attempt(s)**\n\n"
-                    f"<details><summary>Quality reviewer output</summary>\n\n{quality_output}\n\n</details>",
-                )
-                return False
+        await receive_from_client(client)
 
-        # Both reviews passed
-        return True
+        # Review spec
+        await client.query(
+            """
+            Now run the spec reviewer agent to review the implementation. If the implementation does not meet the spec, 
+            fix the issues and re-run the spec reviewer until the implementation meets the spec.
+            """
+        )
 
-    assert False, "unreachable: all loop iterations terminate via return"
+        await receive_from_client(client)
+
+        # Review code quality
+        await client.query(
+            """
+            Now run the code quality reviewer agent to review the implementation. If the implementation does not meet the 
+            code quality bar, fix the issues and re-run the code quality reviewer until the implementation meets the code 
+            quality bar.
+            """
+        )
+
+        await receive_from_client(client)
+
+        # Run the tests
+        await client.query(
+            """
+            If you changed any testable code, make sure there are tests for it, and run the tests until they pass.
+            """
+        )
+
+        await receive_from_client(client)
 
 
 async def run_all_issues(
-    work: WorkSpec,
+    work: SubtaskList,
     *,
     reset_fn: Callable[[str], None] = lambda _: None,
     comment_fn: Callable[[str, int, str], None] = lambda *_: None,
-) -> dict[int, bool]:
-    """Run all issues sequentially. Returns {issue_number: success}."""
-    results: dict[int, bool] = {}
-    for issue in work.issues:
-        print(f"\n── Implementing issue #{issue.number}: {issue.title}")
+) -> dict[str, bool]:
+    """Run all tasks sequentially. Returns {task_id: success}."""
+    results: dict[str, bool] = {}
+    for task in work.tasks.values():
+        print(f"\n── Implementing task {task.task_id}: {task.title}")
         base_sha = get_head_sha()
         success = await run_issue_pipeline(
-            issue,
+            task,
             work,
             base_sha,
             settings.implementer_max_retries,
             reset_fn=reset_fn,
             comment_fn=comment_fn,
         )
-        results[issue.number] = success
+        results[task.task_id] = success
         if success:
-            print(f"   ✓ Issue #{issue.number} implemented and approved")
+            print(f"   ✓ Task {task.task_id} implemented and approved")
         else:
-            print(f"   ✗ Issue #{issue.number} failed — commits reset")
+            print(f"   ✗ Task {task.task_id} failed — commits reset")
     return results
 
 
 @click.command()
-def execute() -> None:
-    """Run the three-agent pipeline for unblocked issues (CI use only)."""
-    work_json_str = os.environ.get("WORK_JSON")
-    if not work_json_str:
-        raise click.ClickException("$WORK_JSON is not set.")
-
-    data = json.loads(work_json_str)
-    work = WorkSpec(
-        epic_number=data["epic_number"],
-        epic_title=data["epic_title"],
-        epic_body=data.get("epic_body", ""),
-        repo=data["repo"],
-        issues=[IssueWork(**i) for i in data["issues"]],
-    )
+@click.option(
+    "-i",
+    "--input",
+    "input_file",
+    type=click.Path(exists=True),
+    required=True,
+    help="Work JSON file (SubtaskList) produced by shipyard find-work",
+)
+def execute(input_file: str) -> None:
+    """Run the three-agent pipeline for unblocked tasks."""
+    work = SubtaskList.model_validate_json(Path(input_file).read_text())
+    repo = resolve_repo()
 
     results = asyncio.run(
         run_all_issues(
             work,
             reset_fn=reset_hard,
-            comment_fn=post_issue_comment,
+            comment_fn=lambda _, n, body: post_issue_comment(repo, n, body),
         )
     )
 
-    successful = [n for n, ok in results.items() if ok]
-    failed = [n for n, ok in results.items() if not ok]
+    successful = [tid for tid, ok in results.items() if ok]
+    failed = [tid for tid, ok in results.items() if not ok]
 
     print(f"\n── Results: {len(successful)} succeeded, {len(failed)} failed")
 
@@ -285,5 +204,5 @@ def execute() -> None:
     )
 
     if failed:
-        print(f"WARNING: {len(failed)} issue(s) failed: {failed}")
+        print(f"WARNING: {len(failed)} task(s) failed: {failed}")
         raise SystemExit(1)

@@ -2,7 +2,6 @@
 """shipyard tasks — extract tasks from a markdown plan using an AI agent."""
 
 import asyncio
-import json
 import os
 from importlib.resources import files as _res_files
 from pathlib import Path
@@ -10,40 +9,18 @@ from typing import Any
 
 import click
 from claude_agent_sdk import (
-    AssistantMessage,
     ClaudeAgentOptions,
     ClaudeSDKClient,
     ProcessError,
-    ResultMessage,
-    TextBlock,
-    ThinkingBlock,
-    ToolUseBlock,
     create_sdk_mcp_server,
     tool,
 )
 
 from shipyard.schemas import Subtask, SubtaskList
 from shipyard.settings import settings
-from shipyard.utils.agent import report_results
+from shipyard.utils.agent import receive_from_client
 
-
-async def receive_from_client(client: ClaudeSDKClient):
-    async for message in client.receive_messages():
-        match message:
-            case AssistantMessage():
-                for block in message.content:
-                    match block:
-                        case TextBlock():
-                            click.echo(f"[text] {block.text}")
-                        case ToolUseBlock():
-                            click.echo(f"[tool] {block.name} {json.dumps(block.input)[:80]}...")
-                        case ThinkingBlock():
-                            click.echo(f"[thinking] {block.thinking}")
-
-            case ResultMessage():
-                report_results(message)
-
-                break
+_TASKS_JSON_EXCLUDE: dict = {"committed": True, "drafting": True, "epic_id": True}
 
 
 async def _run_task_agent(prompt: str, cwd: str, task_list: SubtaskList) -> None:
@@ -230,7 +207,7 @@ async def _run_task_agent(prompt: str, cwd: str, task_list: SubtaskList) -> None
             # review and confirmation
             graph = task_list.model_dump_json(
                 indent=4,
-                exclude={"committed", "drafting"},
+                exclude=_TASKS_JSON_EXCLUDE,
                 context={"truncate": True},
             )
 
@@ -315,6 +292,6 @@ def tasks(input_file: str, output_file: str | None, title: str) -> None:
 
     # Save the tasks to the outfile
     with open(output_file or settings.tasks_output_file, "w+") as f:
-        f.write(task_list.model_dump_json(indent=4, exclude={"committed", "drafting"}))
+        f.write(task_list.model_dump_json(indent=4, exclude=_TASKS_JSON_EXCLUDE))
 
     click.echo(f"Saved {len(task_list.tasks)} tasks to {output_file or settings.tasks_output_file}")

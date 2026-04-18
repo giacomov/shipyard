@@ -79,25 +79,26 @@ Output of `shipyard tasks`. This is also the input format for `shipyard sync`.
 
 ## Work JSON Schema
 
-Output of `shipyard find-work`. This is the input to `shipyard execute` via `$WORK_JSON`.
+Output of `shipyard find-work`. This is the input to `shipyard execute` via `$WORK_JSON`. It uses the same `SubtaskList` / `Subtask` schema as `tasks.json`, with `epic_id` and `task_id` set to stringified GitHub issue numbers.
 
 ```json
 {
-  "epic_number": 42,
-  "epic_title": "string — title of the epic GitHub Issue",
-  "epic_body": "string — body of the epic GitHub Issue",
-  "repo": "owner/repo",
-  "issues": [
-    {
-      "number": 43,
+  "epic_id": "42",
+  "title": "string — title of the epic GitHub Issue",
+  "description": "string — body of the epic GitHub Issue",
+  "tasks": {
+    "43": {
+      "task_id": "43",
       "title": "string — title of the sub-issue",
-      "body": "string — body of the sub-issue"
+      "description": "string — body of the sub-issue",
+      "status": "pending",
+      "blocked_by": []
     }
-  ]
+  }
 }
 ```
 
-`issues` contains only **open, unblocked** sub-issues (no open blockers).
+`tasks` contains only **open, unblocked** sub-issues (no open blockers).
 
 ## Round-Trip Example
 
@@ -184,18 +185,19 @@ Creates:
 
 ```json
 {
-  "epic_number": 10,
-  "epic_title": "Sample Feature Implementation Plan",
-  "epic_body": "Build something simple for testing the parser.",
-  "repo": "myorg/myrepo",
-  "issues": [
-    {
-      "number": 12,
+  "epic_id": "10",
+  "title": "Sample Feature Implementation Plan",
+  "description": "Build something simple for testing the parser.",
+  "tasks": {
+    "12": {
+      "task_id": "12",
       "title": "Implementation",
-      "body": "Implement the main feature using the scaffold from Task 1.\n..."
+      "description": "Implement the main feature using the scaffold from Task 1.\n...",
+      "status": "pending",
+      "blocked_by": []
     }
-  ]
+  }
 }
 ```
 
-Issue #12 appears here because its only blocker (#11) is now closed.
+Task "12" (issue #12) appears here because its only blocker (#11) is now closed.

@@ -6,9 +6,12 @@ import os
 
 import click
 
+from shipyard.schemas import Subtask, SubtaskList
 from shipyard.settings import settings
 from shipyard.utils.gh import gh, parse_closing_references
 from shipyard.utils.gh import set_github_output as set_output
+
+_WORK_JSON_EXCLUDE: dict = {"committed": True, "drafting": True}
 
 
 def gh_get(path: str) -> dict | list:
@@ -114,18 +117,22 @@ def find_unblocked_sub_issues(epic_number: int, repo: str) -> list[dict]:
     return unblocked
 
 
-def build_work_json(epic: dict, unblocked: list[dict], repo: str) -> dict:
-    """Build the JSON payload passed to executor.py."""
-    return {
-        "epic_number": epic["number"],
-        "epic_title": epic["title"],
-        "epic_body": epic.get("body") or "",
-        "repo": repo,
-        "issues": [
-            {"number": issue["number"], "title": issue["title"], "body": issue.get("body") or ""}
-            for issue in unblocked
-        ],
-    }
+def build_subtask_list(epic: dict, unblocked: list[dict]) -> SubtaskList:
+    """Convert GitHub epic + unblocked issues into a SubtaskList."""
+    tasks: dict[str, Subtask] = {}
+    for issue in unblocked:
+        tid = str(issue["number"])
+        tasks[tid] = Subtask(
+            task_id=tid,
+            title=issue["title"],
+            description=issue.get("body") or "",
+        )
+    return SubtaskList(
+        epic_id=str(epic["number"]),
+        title=epic["title"],
+        description=epic.get("body") or "",
+        tasks=tasks,
+    )
 
 
 @click.command("find-work")
@@ -165,6 +172,6 @@ def find_work() -> None:
 
     unblocked_nums = ", ".join(f"#{u['number']}" for u in unblocked)
     print(f"Unblocked: {unblocked_nums}")
-    work = build_work_json(epic, unblocked, repo)
+    work = build_subtask_list(epic, unblocked)
     set_output("has_work", "true")
-    set_output("work_json", json.dumps(work))
+    set_output("work_json", work.model_dump_json(exclude=_WORK_JSON_EXCLUDE))

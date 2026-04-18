@@ -4,6 +4,7 @@ from shipyard.schemas.subtask import Subtask
 
 
 class SubtaskList(pydantic.BaseModel):
+    epic_id: str = ""
     title: str
     description: str
     tasks: dict[str, Subtask] = {}

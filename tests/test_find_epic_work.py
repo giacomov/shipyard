@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 
 from shipyard.commands.find_work import (
-    build_work_json,
+    build_subtask_list,
     find_unblocked_sub_issues,
     gh,
     gh_get,
@@ -255,26 +255,29 @@ def test_find_unblocked_closed_blocker_does_not_block(mock_get):
 
 
 # ---------------------------------------------------------------------------
-# build_work_json
+# build_subtask_list
 # ---------------------------------------------------------------------------
 
 
-def test_build_work_json_structure():
+def test_build_subtask_list_structure():
     epic = {"number": 10, "title": "My Epic", "body": "Do stuff"}
     issues = [{"number": 5, "title": "Task A", "body": "Spec A"}]
-    result = build_work_json(epic, issues, "owner/repo")
-    assert result["epic_number"] == 10
-    assert result["repo"] == "owner/repo"
-    assert len(result["issues"]) == 1
-    assert result["issues"][0]["number"] == 5
+    result = build_subtask_list(epic, issues)
+    assert result.epic_id == "10"
+    assert result.title == "My Epic"
+    assert result.description == "Do stuff"
+    assert len(result.tasks) == 1
+    assert result.tasks["5"].task_id == "5"
+    assert result.tasks["5"].title == "Task A"
+    assert result.tasks["5"].description == "Spec A"
 
 
-def test_build_work_json_none_body_becomes_empty_string():
+def test_build_subtask_list_none_body_becomes_empty_string():
     epic = {"number": 1, "title": "E", "body": None}
     issues = [{"number": 2, "title": "T", "body": None}]
-    result = build_work_json(epic, issues, "o/r")
-    assert result["epic_body"] == ""
-    assert result["issues"][0]["body"] == ""
+    result = build_subtask_list(epic, issues)
+    assert result.description == ""
+    assert result.tasks["2"].description == ""
 
 
 # ---------------------------------------------------------------------------

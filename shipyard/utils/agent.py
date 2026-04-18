@@ -1,7 +1,17 @@
 """Shared helpers for working with the claude_agent_sdk query loop."""
 
+import json
+
 import click
-from claude_agent_sdk import Message, ResultMessage
+from claude_agent_sdk import (
+    AssistantMessage,
+    ClaudeSDKClient,
+    Message,
+    ResultMessage,
+    TextBlock,
+    ThinkingBlock,
+    ToolUseBlock,
+)
 
 
 def report_results(message: Message) -> None:
@@ -31,3 +41,22 @@ def report_results(message: Message) -> None:
 
             if message.is_error:
                 raise RuntimeError(message.result or "Agent returned an error")
+
+
+async def receive_from_client(client: ClaudeSDKClient):
+    async for message in client.receive_messages():
+        match message:
+            case AssistantMessage():
+                for block in message.content:
+                    match block:
+                        case TextBlock():
+                            click.echo(f"[text] {block.text}")
+                        case ToolUseBlock():
+                            click.echo(f"[tool] {block.name} {json.dumps(block.input)[:80]}...")
+                        case ThinkingBlock():
+                            click.echo(f"[thinking] {block.thinking}")
+
+            case ResultMessage():
+                report_results(message)
+
+                break
