@@ -124,29 +124,64 @@ def extract_github_event() -> None:
         review_body: str = event_json["review"].get("body") or ""
         pr_number: int = event_json["pull_request"]["number"]
         review_id: int = event_json["review"]["id"]
+        branch_name: str = event_json["pull_request"]["head"]["ref"]
 
-        try:
-            issue_number = extract_issue_from_pr_review(event_json, repo)
-        except ValueError as e:
-            click.echo(f"Error: {e}", err=True)
-            sys.exit(1)
-
-        context = fetch_issue_context(repo, issue_number)
         inline_comments = fetch_review_inline_comments(repo, pr_number, review_id)
         feedback = build_review_feedback(review_body, inline_comments)
-
-        with open("prompt.txt", "w") as f:
-            f.write(
-                f"Issue #{context['issue_number']}: {context['issue_title']}\n\n{context['issue_body']}"
-            )
 
         with open("review-feedback.txt", "w") as f:
             f.write(feedback)
 
-        _set_github_output("issue_number", str(issue_number))
-        _set_github_output("issue_title", context["issue_title"])
-        _set_github_output("pr_number", str(pr_number))
-        _set_github_output("has_review", "true")
+        if branch_name.startswith("shipyard/"):
+            issue_refs = _parse_closing_references(
+                event_json.get("pull_request", {}).get("body") or ""
+            )
+            if not issue_refs:
+                click.echo(
+                    "Error: no closing references found in implementation PR body.", err=True
+                )
+                sys.exit(1)
+
+            contexts = [fetch_issue_context(repo, n) for n in issue_refs]
+            prompt_parts = [
+                f"Issue #{c['issue_number']}: {c['issue_title']}\n\n{c['issue_body']}"
+                for c in contexts
+            ]
+            with open("prompt.txt", "w") as f:
+                f.write("\n\n---\n\n".join(prompt_parts))
+
+            _set_github_output("review_target", "implementation")
+            _set_github_output("branch_name", branch_name)
+            _set_github_output("pr_number", str(pr_number))
+            _set_github_output("has_review", "true")
+
+        elif branch_name.startswith("plan/"):
+            try:
+                issue_number = extract_issue_from_pr_review(event_json, repo)
+            except ValueError as e:
+                click.echo(f"Error: {e}", err=True)
+                sys.exit(1)
+
+            context = fetch_issue_context(repo, issue_number)
+
+            with open("prompt.txt", "w") as f:
+                f.write(
+                    f"Issue #{context['issue_number']}: {context['issue_title']}\n\n{context['issue_body']}"
+                )
+
+            _set_github_output("review_target", "plan")
+            _set_github_output("issue_number", str(issue_number))
+            _set_github_output("issue_title", context["issue_title"])
+            _set_github_output("pr_number", str(pr_number))
+            _set_github_output("has_review", "true")
+
+        else:
+            click.echo(
+                f"Error: unrecognised branch prefix '{branch_name}' — "
+                "expected 'plan/' or 'shipyard/'.",
+                err=True,
+            )
+            sys.exit(1)
 
     else:
         click.echo("Error: unrecognised event type or label — nothing to do.", err=True)

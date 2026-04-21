@@ -52,7 +52,7 @@ async def test_run_all_issues_calls_pipeline_for_each_task(mock_sha, mock_pipeli
 
     tasks = [_task(task_id="1", title="A"), _task(task_id="2", title="B")]
     work = _work(tasks=tasks)
-    results = await run_all_issues(work)
+    results = await run_all_issues(work, model="sonnet", effort="high")
     assert mock_pipeline.call_count == 2
     assert results == {"successful": ["1", "2"], "failed": []}
 
@@ -65,7 +65,7 @@ async def test_run_all_issues_calls_pipeline_for_all_tasks(mock_sha, mock_pipeli
 
     tasks = [_task(task_id=str(i), title=f"T{i}") for i in range(3)]
     work = _work(tasks=tasks)
-    results = await run_all_issues(work)
+    results = await run_all_issues(work, model="sonnet", effort="high")
     assert mock_pipeline.call_count == 3
     assert results == {"successful": ["0", "1", "2"], "failed": []}
 
@@ -83,7 +83,7 @@ async def test_run_all_issues_tracks_failures(mock_sha):
         new_callable=AsyncMock,
         side_effect=[True, False, True],
     ):
-        results = await run_all_issues(work)
+        results = await run_all_issues(work, model="sonnet", effort="high")
 
     assert results == {"successful": ["0", "2"], "failed": ["1"]}
 
@@ -100,7 +100,7 @@ async def test_run_all_issues_all_fail(mock_sha, mock_pipeline):
 
     tasks = [_task(task_id="1", title="A"), _task(task_id="2", title="B")]
     work = _work(tasks=tasks)
-    results = await run_all_issues(work)
+    results = await run_all_issues(work, model="sonnet", effort="high")
     assert results == {"successful": [], "failed": ["1", "2"]}
 
 
@@ -117,7 +117,7 @@ def test_execute_command_missing_input_file():
     runner = CliRunner()
     result = runner.invoke(execute)
     assert result.exit_code != 0
-    assert "input" in result.output.lower() or "required" in result.output.lower()
+    assert "provide -i" in result.output.lower() or "required" in result.output.lower()
 
 
 _WORK_JSON = json.dumps(

@@ -176,7 +176,7 @@ def test_extract_github_event_pr_review(
 ) -> None:
     event_json: dict[str, Any] = {
         "review": {"id": 999, "state": "changes_requested", "body": "Please add tests"},
-        "pull_request": {"number": 3, "body": "Closes #7"},
+        "pull_request": {"number": 3, "body": "Closes #7", "head": {"ref": "plan/i7"}},
     }
     event_file = tmp_path / "event.json"
     event_file.write_text(json.dumps(event_json))
@@ -201,7 +201,7 @@ def test_extract_github_event_pr_review(
     }
 
     runner = CliRunner()
-    with patch("subprocess.run", side_effect=[issue_mock, inline_mock]):
+    with patch("subprocess.run", side_effect=[inline_mock, issue_mock]):
         with runner.isolated_filesystem() as isolated_dir:
             result = runner.invoke(extract_github_event, env=env_vars)
             prompt_path = Path(isolated_dir) / "prompt.txt"
@@ -226,7 +226,7 @@ def test_extract_github_event_pr_review_inline_only(
     """Review body is empty but inline comments carry the feedback."""
     event_json: dict[str, Any] = {
         "review": {"id": 42, "state": "changes_requested", "body": ""},
-        "pull_request": {"number": 5, "body": "Closes #9"},
+        "pull_request": {"number": 5, "body": "Closes #9", "head": {"ref": "plan/i9"}},
     }
     event_file = tmp_path / "event.json"
     event_file.write_text(json.dumps(event_json))
@@ -251,7 +251,7 @@ def test_extract_github_event_pr_review_inline_only(
     }
 
     runner = CliRunner()
-    with patch("subprocess.run", side_effect=[issue_mock, inline_mock]):
+    with patch("subprocess.run", side_effect=[inline_mock, issue_mock]):
         with runner.isolated_filesystem() as isolated_dir:
             result = runner.invoke(extract_github_event, env=env_vars)
             review_path = Path(isolated_dir) / "review-feedback.txt"

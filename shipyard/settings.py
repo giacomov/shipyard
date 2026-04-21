@@ -2,6 +2,8 @@ from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+type EffortLevel = Literal["low", "medium", "high"]
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="SHIPYARD_")
@@ -15,13 +17,16 @@ class Settings(BaseSettings):
     implementer_max_retries: int = 1
 
     planning_model: str = "opus"
-    planning_effort: Literal["low", "medium", "high"] = "high"
+    planning_effort: EffortLevel = "high"
 
     execution_model: str = "sonnet"
-    execution_effort: Literal["low", "medium", "high"] = "high"
+    execution_effort: EffortLevel = "high"
 
     review_model: str = "sonnet"
-    review_effort: Literal["low", "medium", "high"] = "high"
+    review_effort: EffortLevel = "high"
+
+    revision_model: str = "sonnet"
+    revision_effort: EffortLevel = "high"
 
 
 settings = Settings()

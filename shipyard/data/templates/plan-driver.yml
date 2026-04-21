@@ -6,6 +6,10 @@ on:
   pull_request_review:
     types: [submitted]
 
+concurrency:
+  group: plan-driver-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   plan:
     name: Generate or update implementation plan
@@ -42,11 +46,14 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
 
-      - name: Checkout plan branch
+      - name: Checkout branch
         run: |
+          REVIEW_TARGET="${{ steps.extract-event.outputs.review_target }}"
           ISSUE="${{ steps.extract-event.outputs.issue_number }}"
           git fetch origin
-          if [ "${{ steps.extract-event.outputs.has_review }}" == "true" ]; then
+          if [ "$REVIEW_TARGET" == "implementation" ]; then
+            git checkout "${{ steps.extract-event.outputs.branch_name }}"
+          elif [ "${{ steps.extract-event.outputs.has_review }}" == "true" ]; then
             git checkout "plan/i${ISSUE}"
           elif git ls-remote --exit-code origin "plan/i${ISSUE}" > /dev/null 2>&1; then
             git checkout -b "plan/i${ISSUE}" "origin/plan/i${ISSUE}"
@@ -55,6 +62,7 @@ jobs:
           fi
 
       - name: Generate or update plan
+        if: steps.extract-event.outputs.review_target != 'implementation'
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
@@ -70,7 +78,18 @@ jobs:
             --issue-title "${{ steps.extract-event.outputs.issue_title }}" \
             $EXTRA_ARGS
 
+      - name: Address review feedback
+        if: steps.extract-event.outputs.review_target == 'implementation'
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          shipyard execute \
+            --review-feedback-file review-feedback.txt \
+            --prompt-file prompt.txt
+
       - name: Commit and publish plan
+        if: steps.extract-event.outputs.review_target != 'implementation'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -97,3 +116,14 @@ jobs:
                 --repo "${{ github.repository }}"
             fi
           fi
+
+      - name: Push revision and notify
+        if: steps.extract-event.outputs.review_target == 'implementation'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH="${{ steps.extract-event.outputs.branch_name }}"
+          git push origin "$BRANCH"
+          gh pr comment ${{ steps.extract-event.outputs.pr_number }} \
+            --repo "${{ github.repository }}" \
+            --body "Shipyard has addressed the review feedback. Please review the latest changes."
