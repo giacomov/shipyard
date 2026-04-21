@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     epic_status_label: str = "in-progress"
     epic_label_color: str = "0075ca"
     implementer_max_retries: int = 1
+    planner_max_retries: int = 5
 
     planning_model: str = "opus"
     planning_effort: EffortLevel = "high"

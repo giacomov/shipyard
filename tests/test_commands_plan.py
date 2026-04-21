@@ -2,12 +2,12 @@
 
 import os
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from click.testing import CliRunner
 
-from shipyard.commands.plan import _strip_outer_fence, plan
+from shipyard.commands.plan import plan
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
@@ -21,6 +21,17 @@ def tmp_cwd(tmp_path: Any) -> Any:
     os.chdir(tmp_path)
     yield tmp_path
     os.chdir(original)
+
+
+def _make_agent_side_effect(plan_path: str, content: str):
+    """Return an async function that writes content to plan_path, simulating the agent."""
+
+    async def _fake_agent(*_args: Any, **_kwargs: Any) -> None:
+        os.makedirs(os.path.dirname(plan_path), exist_ok=True)
+        with open(plan_path, "w") as f:
+            f.write(content)
+
+    return _fake_agent
 
 
 # ---------------------------------------------------------------------------
@@ -42,8 +53,12 @@ def test_plan_requires_prompt_or_file() -> None:
 
 def test_plan_initial_run_creates_plan_file(tmp_cwd: Any) -> None:
     runner = CliRunner()
+    plan_path = str(tmp_cwd / "plans" / "i42.md")
 
-    with patch("shipyard.commands.plan.asyncio.run", return_value="# Generated Plan\nDetails here"):
+    with patch(
+        "shipyard.commands.plan.run_plan_agent",
+        new=_make_agent_side_effect(plan_path, "<!-- Related to: #42 -->\n\n# Generated Plan"),
+    ):
         result = runner.invoke(
             plan,
             ["--prompt", "Test issue", "--issue-number", "42"],
@@ -71,7 +86,14 @@ def test_plan_replan_updates_plan_file(tmp_cwd: Any) -> None:
     feedback_file = tmp_cwd / "feedback.txt"
     feedback_file.write_text("Please add more detail to section 2.")
 
-    with patch("shipyard.commands.plan.asyncio.run", return_value="# Revised Plan\nNew content"):
+    plan_path = str(tmp_cwd / "plans" / "i42.md")
+
+    with patch(
+        "shipyard.commands.plan.run_plan_agent",
+        new=_make_agent_side_effect(
+            plan_path, "<!-- Related to: #42 -->\n\n# Revised Plan\nNew content"
+        ),
+    ):
         result = runner.invoke(
             plan,
             [
@@ -103,8 +125,12 @@ def test_plan_replan_updates_plan_file(tmp_cwd: Any) -> None:
 
 def test_plan_file_has_correct_header(tmp_cwd: Any) -> None:
     runner = CliRunner()
+    plan_path = str(tmp_cwd / "plans" / "i42.md")
 
-    with patch("shipyard.commands.plan.asyncio.run", return_value="# My Plan\nStep 1\nStep 2"):
+    with patch(
+        "shipyard.commands.plan.run_plan_agent",
+        new=_make_agent_side_effect(plan_path, "<!-- Related to: #42 -->\n\n# My Plan\nStep 1"),
+    ):
         result = runner.invoke(
             plan,
             ["--prompt", "ctx", "--issue-number", "42"],
@@ -118,30 +144,134 @@ def test_plan_file_has_correct_header(tmp_cwd: Any) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 5. test_strip_outer_fence
+# 5. test_plan_prepends_header_if_agent_omits_it
 # ---------------------------------------------------------------------------
 
 
-def test_strip_outer_fence_removes_markdown_fence() -> None:
-    text = "```markdown\n# My Plan\n\nStep 1\n```"
-    assert _strip_outer_fence(text) == "# My Plan\n\nStep 1"
+def test_plan_prepends_header_if_agent_omits_it(tmp_cwd: Any) -> None:
+    runner = CliRunner()
+    plan_path = str(tmp_cwd / "plans" / "i42.md")
+
+    with patch(
+        "shipyard.commands.plan.run_plan_agent",
+        new=_make_agent_side_effect(plan_path, "# Plan Without Header\nContent here"),
+    ):
+        result = runner.invoke(
+            plan,
+            ["--prompt", "ctx", "--issue-number", "42"],
+            catch_exceptions=False,
+        )
+
+    assert result.exit_code == 0, result.output
+    content = (tmp_cwd / "plans" / "i42.md").read_text()
+    assert content.startswith("<!-- Related to: #42 -->")
+    assert "# Plan Without Header" in content
 
 
-def test_strip_outer_fence_removes_plain_fence() -> None:
-    text = "```\n# My Plan\n\nStep 1\n```"
-    assert _strip_outer_fence(text) == "# My Plan\n\nStep 1"
+# ---------------------------------------------------------------------------
+# 6. test_plan_raises_when_agent_does_not_write_file
+# ---------------------------------------------------------------------------
 
 
-def test_strip_outer_fence_leaves_unfenced_text_unchanged() -> None:
-    text = "# My Plan\n\nStep 1"
-    assert _strip_outer_fence(text) == "# My Plan\n\nStep 1"
+def test_plan_raises_when_agent_does_not_write_file(tmp_cwd: Any) -> None:
+    runner = CliRunner()
+
+    async def _noop(*_args: Any, **_kwargs: Any) -> None:
+        raise RuntimeError("Planning agent failed to write plan file")
+
+    with patch("shipyard.commands.plan.run_plan_agent", new=_noop):
+        result = runner.invoke(
+            plan,
+            ["--prompt", "ctx", "--issue-number", "42"],
+        )
+
+    assert result.exit_code != 0
 
 
-def test_strip_outer_fence_strips_surrounding_whitespace() -> None:
-    text = "  \n# My Plan\n\nStep 1\n  "
-    assert _strip_outer_fence(text) == "# My Plan\n\nStep 1"
+# ---------------------------------------------------------------------------
+# 7. test_run_plan_agent_retries_on_missing_file
+# ---------------------------------------------------------------------------
 
 
-def test_strip_outer_fence_partial_fence_not_removed() -> None:
-    text = "```markdown\n# My Plan\n\nStep 1"
-    assert _strip_outer_fence(text) == "```markdown\n# My Plan\n\nStep 1"
+@pytest.mark.asyncio
+async def test_run_plan_agent_retries_on_missing_file(tmp_cwd: Any) -> None:
+    from shipyard.commands.plan import run_plan_agent
+
+    plan_path = str(tmp_cwd / "plans" / "i42.md")
+    os.makedirs(os.path.dirname(plan_path), exist_ok=True)
+
+    call_count = 0
+
+    async def fake_receive(*_args: Any, **_kwargs: Any) -> str:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 2:
+            with open(plan_path, "w") as f:
+                f.write("# Plan\nContent")
+        return ""
+
+    mock_client = AsyncMock()
+    mock_client.query = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch("shipyard.commands.plan.ClaudeSDKClient", return_value=mock_client),
+        patch("shipyard.commands.plan.receive_from_client", side_effect=fake_receive),
+    ):
+        await run_plan_agent(
+            prompt="test prompt",
+            cwd=str(tmp_cwd),
+            plan_path=plan_path,
+            original_content=None,
+        )
+
+    assert call_count == 2
+    assert mock_client.query.call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# 8. test_run_plan_agent_detects_unchanged_file_on_replan
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_run_plan_agent_detects_unchanged_file_on_replan(tmp_cwd: Any) -> None:
+    from shipyard.commands.plan import run_plan_agent
+
+    plan_path = str(tmp_cwd / "plans" / "i42.md")
+    os.makedirs(os.path.dirname(plan_path), exist_ok=True)
+    original = "# Old Plan\nOld content"
+    with open(plan_path, "w") as f:
+        f.write(original)
+
+    call_count = 0
+
+    async def fake_receive(*_args: Any, **_kwargs: Any) -> str:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 2:
+            with open(plan_path, "w") as f:
+                f.write("# Revised Plan\nNew content")
+        return ""
+
+    mock_client = AsyncMock()
+    mock_client.query = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch("shipyard.commands.plan.ClaudeSDKClient", return_value=mock_client),
+        patch("shipyard.commands.plan.receive_from_client", side_effect=fake_receive),
+    ):
+        await run_plan_agent(
+            prompt="test prompt",
+            cwd=str(tmp_cwd),
+            plan_path=plan_path,
+            original_content=original,
+        )
+
+    assert call_count == 2
+    assert mock_client.query.call_count == 2
+    with open(plan_path) as f:
+        assert "Revised Plan" in f.read()

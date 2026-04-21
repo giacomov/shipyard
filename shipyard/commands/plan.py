@@ -3,13 +3,12 @@
 
 import asyncio
 import os
-import re
 
 import click
-from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, TextBlock, query
+from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
 
 from shipyard.settings import settings
-from shipyard.utils.agent import report_results
+from shipyard.utils.agent import receive_from_client
 
 _INITIAL_PROMPT = """\
 Read the issue context and the codebase, then write an implementation plan in Markdown.
@@ -17,16 +16,24 @@ Read the issue context and the codebase, then write an implementation plan in Ma
 Each task in the plan will become its own PR, so group work to keep the number of tasks
 small without sacrificing the focus and cohesiveness of each PR.
 
+Write the plan to: {plan_path}
+Start the file with the line `<!-- Related to: #{issue_number} -->` followed by a blank line.
+
 ## Issue context
 
 {context}
 """
 
 _REPLAN_PROMPT = """\
-Read the issue context and the codebase, then write an implementation plan in Markdown.
+A previous version of this plan was reviewed and changes were requested.
+Read the issue context, the existing plan, and the review feedback, then revise the plan
+to address the feedback. Write the updated plan in Markdown.
 
 Each task in the plan will become its own PR, so group work to keep the number of tasks
 small without sacrificing the focus and cohesiveness of each PR.
+
+Write the plan to: {plan_path}
+Start the file with the line `<!-- Related to: #{issue_number} -->` followed by a blank line.
 
 ## Issue context
 
@@ -41,31 +48,56 @@ small without sacrificing the focus and cohesiveness of each PR.
 {review_feedback}
 """
 
-
-def _strip_outer_fence(text: str) -> str:
-    stripped = text.strip()
-    lines = stripped.split("\n")
-    if len(lines) >= 2 and re.match(r"^```", lines[0]) and lines[-1].strip() == "```":
-        return "\n".join(lines[1:-1]).strip()
-    return stripped
+_RETRY_PROMPT = "You forgot to write the plan to {plan_path}. Please write it now."
 
 
-async def run_plan_agent(prompt: str, cwd: str) -> str:
+def _plan_file_changed(plan_path: str, original_content: str | None) -> bool:
+    """Return True if plan_path exists and its content differs from original_content."""
+    if not os.path.exists(plan_path):
+        return False
+    with open(plan_path) as f:
+        current = f.read()
+    return current != (original_content or "")
+
+
+async def run_plan_agent(
+    prompt: str,
+    cwd: str,
+    plan_path: str,
+    original_content: str | None,
+) -> None:
     options = ClaudeAgentOptions(
         permission_mode="bypassPermissions",
-        allowed_tools=["Read", "Glob", "Grep"],
+        allowed_tools=["Read", "Glob", "Grep", "Write"],
         cwd=cwd,
     )
-    output_parts: list[str] = []
-    async for message in query(prompt=prompt, options=options):
-        report_results(message)
-        match message:
-            case AssistantMessage():
-                for block in message.content:
-                    match block:
-                        case TextBlock():
-                            output_parts.append(block.text)
-    return "\n".join(output_parts)
+    async with ClaudeSDKClient(options=options) as client:
+        await client.query(prompt)
+        await receive_from_client(client)
+
+        for _ in range(settings.planner_max_retries):
+            if _plan_file_changed(plan_path, original_content):
+                return
+
+            click.echo(f"Plan file not written to {plan_path}, retrying...", err=True)
+            await client.query(_RETRY_PROMPT.format(plan_path=plan_path))
+            await receive_from_client(client)
+
+        if not _plan_file_changed(plan_path, original_content):
+            raise RuntimeError(
+                f"Planning agent failed to write plan file after "
+                f"{settings.planner_max_retries} retries: {plan_path}"
+            )
+
+
+def _ensure_header(plan_path: str, issue_number: str) -> None:
+    """Prepend the HTML comment header if the agent omitted it."""
+    with open(plan_path) as f:
+        content = f.read()
+    header = f"<!-- Related to: #{issue_number} -->"
+    if not content.startswith(header):
+        with open(plan_path, "w") as f:
+            f.write(header + "\n\n" + content)
 
 
 @click.command()
@@ -110,18 +142,14 @@ def plan(
         raise click.UsageError("Provide --prompt or --prompt-file")
 
     cwd = os.getcwd()
+    os.makedirs(settings.plans_dir, exist_ok=True)
+    plan_path = f"{settings.plans_dir}/i{issue_number}.md"
 
     if pr_number is None:
-        agent_prompt = _INITIAL_PROMPT.format(context=context)
-        plan_content_raw = asyncio.run(run_plan_agent(agent_prompt, cwd))
-
-        header = f"<!-- Related to: #{issue_number} -->\n\n"
-        plan_content = header + _strip_outer_fence(plan_content_raw)
-
-        os.makedirs(settings.plans_dir, exist_ok=True)
-        plan_path = f"{settings.plans_dir}/i{issue_number}.md"
-        with open(plan_path, "w") as f:
-            f.write(plan_content)
+        agent_prompt = _INITIAL_PROMPT.format(
+            context=context, plan_path=plan_path, issue_number=issue_number
+        )
+        original_content = None
     else:
         existing_plan = ""
         if existing_plan_path:
@@ -135,17 +163,14 @@ def plan(
 
         agent_prompt = _REPLAN_PROMPT.format(
             context=context,
+            plan_path=plan_path,
+            issue_number=issue_number,
             existing_plan=existing_plan,
             review_feedback=review_feedback,
         )
-        plan_content_raw = asyncio.run(run_plan_agent(agent_prompt, cwd))
+        original_content = existing_plan if existing_plan_path else None
 
-        header = f"<!-- Related to: #{issue_number} -->\n\n"
-        plan_content = header + _strip_outer_fence(plan_content_raw)
-
-        os.makedirs(settings.plans_dir, exist_ok=True)
-        plan_path = f"{settings.plans_dir}/i{issue_number}.md"
-        with open(plan_path, "w") as f:
-            f.write(plan_content)
+    asyncio.run(run_plan_agent(agent_prompt, cwd, plan_path, original_content))
+    _ensure_header(plan_path, issue_number)
 
     print(plan_path)
