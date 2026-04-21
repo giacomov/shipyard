@@ -93,6 +93,7 @@ async def _run_issue_pipeline_inner(
         .format(
             TASK_DESCRIPTION=task_description,
             CONTEXT=context,
+            BASE_SHA=base_sha,
         )
     )
 
@@ -103,6 +104,7 @@ async def _run_issue_pipeline_inner(
         .format(
             TASK_DESCRIPTION=task_description,
             CONTEXT=context,
+            BASE_SHA=base_sha,
         )
     )
 
@@ -117,14 +119,14 @@ async def _run_issue_pipeline_inner(
             "spec_reviewer": AgentDefinition(
                 description="Expert spec reviewer specialist. Verifies against the spec and provide feedback.",
                 prompt=spec_reviewer_prompt,
-                tools=["Read", "Grep", "Glob"],
+                tools=["Bash", "Read", "Grep", "Glob"],
                 model=settings.review_model,
                 effort=settings.review_effort,
             ),
             "code_quality_reviewer": AgentDefinition(
                 description="Expert code quality reviewer specialist. Reviews the code for quality and provide feedback.",
                 prompt=code_quality_prompt,
-                tools=["Read", "Grep", "Glob"],
+                tools=["Bash", "Read", "Grep", "Glob"],
                 model=settings.review_model,
                 effort=settings.review_effort,
             ),

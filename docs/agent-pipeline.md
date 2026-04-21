@@ -58,17 +58,18 @@ Branch creation, push, and PR opening are handled separately by `shipyard publis
 
 ### Agent 2: Spec Reviewer
 
-- Receives the original `{TASK_DESCRIPTION}` and `{IMPLEMENTER_REPORT}`.
-- **Does not trust the implementer's report**; must read actual code via `git diff {BASE_SHA}..HEAD`.
+- Receives `{TASK_DESCRIPTION}`, `{CONTEXT}`, and `{BASE_SHA}`.
+- Runs `git diff {BASE_SHA}..HEAD` to identify what changed — reviews only the diff, not pre-existing code.
 - Checks for missing requirements, over-engineering, and misunderstandings.
-- Outputs `APPROVED` or `CHANGES_REQUESTED` with file:line references.
+- Has tools: `Bash`, `Read`, `Grep`, `Glob`.
 
 ### Agent 3: Code Quality Reviewer
 
 - Runs only after the spec reviewer approves.
-- Reads `{IMPLEMENTER_REPORT}` and the git diff for the same range.
+- Receives `{TASK_DESCRIPTION}`, `{CONTEXT}`, and `{BASE_SHA}`.
+- Runs `git diff --stat {BASE_SHA}..HEAD` and `git diff {BASE_SHA}..HEAD` — reviews only the diff.
 - Reviews type hints, error handling, test quality, architecture, and security.
-- Outputs `APPROVED` or `CHANGES_REQUESTED` with a structured report.
+- Has tools: `Bash`, `Read`, `Grep`, `Glob`.
 
 ## Retry Logic
 

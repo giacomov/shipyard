@@ -21,9 +21,20 @@ NOTE: some of the other tasks in the plan might have been already accomplished.
 - Check for missing pieces
 - Look for extra features they didn't mention
 
+## Code to review
+
+Run the following to see what was changed:
+
+```bash
+git diff --stat {BASE_SHA}..HEAD
+git diff {BASE_SHA}..HEAD
+```
+
+Focus your review ONLY on these changes — do not review pre-existing code.
+
 ## Your Job
 
-Read the implementation code (all staged and committed code) and verify:
+Read the changed code and verify:
 
 **Missing requirements:**
 - Did they implement everything that was requested?

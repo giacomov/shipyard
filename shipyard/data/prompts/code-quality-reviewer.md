@@ -16,7 +16,14 @@ NOTE: some of the other tasks in the plan might have been already accomplished.
 
 ## Code to review
 
-Review all staged and committed code.
+Run the following to see what was changed:
+
+```bash
+git diff --stat {BASE_SHA}..HEAD
+git diff {BASE_SHA}..HEAD
+```
+
+Focus your review ONLY on these changes — do not review pre-existing code.
 
 ## Review Checklist
 

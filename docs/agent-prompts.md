@@ -78,16 +78,17 @@ The implementer runs in `bypassPermissions` mode with tools: `Bash`, `Read`, `Wr
 | Placeholder | Value |
 |-------------|-------|
 | `{TASK_DESCRIPTION}` | The GitHub Issue body |
-| `{IMPLEMENTER_REPORT}` | Full text output of the implementer agent |
+| `{CONTEXT}` | Epic title + list of all tasks in the plan |
 | `{BASE_SHA}` | The git SHA recorded before the implementer ran |
 
 **What it instructs the agent to do:**
 
-- **Not** trust the implementer's report — read actual code via `git diff {BASE_SHA}..HEAD`.
+- Run `git diff {BASE_SHA}..HEAD` to identify what changed.
+- Focus only on the changes — do not review pre-existing code.
 - Check for missing requirements, extra unasked-for work, and misunderstandings.
-- Output `APPROVED` or `CHANGES_REQUESTED` with specific file:line references.
+- Report findings for the implementer to address.
 
-The verdict is parsed by `parse_review_verdict()`: returns `False` immediately if `CHANGES_REQUESTED` appears anywhere; otherwise returns `True` only if `APPROVED` appears without a preceding `NOT `.
+Tools: `Bash`, `Read`, `Grep`, `Glob`.
 
 ## `code-quality-reviewer.md`
 
@@ -97,15 +98,18 @@ The verdict is parsed by `parse_review_verdict()`: returns `False` immediately i
 
 | Placeholder | Value |
 |-------------|-------|
-| `{IMPLEMENTER_REPORT}` | Full text output of the implementer agent |
+| `{TASK_DESCRIPTION}` | The GitHub Issue body |
+| `{CONTEXT}` | Epic title + list of all tasks in the plan |
 | `{BASE_SHA}` | The git SHA recorded before the implementer ran |
 
 **What it instructs the agent to do:**
 
-- Read `git diff --stat {BASE_SHA}..HEAD` and `git diff {BASE_SHA}..HEAD`.
+- Run `git diff --stat {BASE_SHA}..HEAD` and `git diff {BASE_SHA}..HEAD`.
+- Focus only on the changes — do not review pre-existing code.
 - Review: code quality, file structure, testing, architecture, and security.
-- Produce a structured report with Strengths, Issues (Critical / Important / Minor), and an Assessment.
-- End with `APPROVED` or `CHANGES_REQUESTED` plus one-sentence reasoning.
+- Report findings for the implementer to address.
+
+Tools: `Bash`, `Read`, `Grep`, `Glob`.
 
 ## Customizing Prompts for Maintainers
 
