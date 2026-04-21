@@ -83,7 +83,7 @@ Do the new docs respect these principles?
 - Broad architectural decisions go in ARCHITECTURE.md
 - Use short, focused files instead of large files. Every file covers a cohesive topic, for example a subsistem
 - Do not repeat content between different documents, except for whatever is needed in ARCHITECTURE.md
-- Documentation must reflect only the current status. DO NOT add historical notes, or keep references to what the status was in the past
+- Documentation must reflect only the current state of the project. DO NOT add notes about how the code, architecture, or configuration used to work (e.g., "we previously used X", "this was refactored from Y"). References to external or domain-level history are fine — this rule only applies to internal project history
 - Settings, values, defaults, and all other values defined in code should NOT be copied over to the docs. Instead, reference them to indicate where to find them in the code (avoid the code and the docs to go out of sync)
 - Every public API/function gets a one-line summary + params + return value
 - Outdated docs are worse than no docs — delete or update, never leave stale
