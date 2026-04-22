@@ -20,6 +20,8 @@ from shipyard.schemas import Subtask, SubtaskList
 from shipyard.settings import settings
 from shipyard.utils.agent import receive_from_client
 
+_system_prompt = _res_files("shipyard.data.prompts").joinpath("system-prompt.md").read_text()
+
 _TASKS_JSON_EXCLUDE: dict = {"committed": True, "drafting": True, "epic_id": True}
 
 
@@ -190,7 +192,7 @@ async def _run_task_agent(prompt: str, cwd: str, task_list: SubtaskList) -> None
             "mcp__task_server__commit",
         ],
         cwd=cwd,
-        system_prompt={"type": "preset", "preset": "claude_code"},
+        system_prompt=_system_prompt,
         setting_sources=["project"],
         model=settings.planning_model,
         effort=settings.planning_effort,

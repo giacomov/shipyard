@@ -16,6 +16,8 @@ from shipyard.utils.agent import receive_from_client
 from shipyard.utils.gh import post_issue_comment, resolve_repo
 from shipyard.utils.git import get_head_sha, reset_hard
 
+_system_prompt = _res_files("shipyard.data.prompts").joinpath("system-prompt.md").read_text()
+
 
 async def run_issue_pipeline(
     task: Subtask,
@@ -111,7 +113,7 @@ async def _run_issue_pipeline_inner(
     options = ClaudeAgentOptions(
         permission_mode="dontAsk",
         allowed_tools=["Read", "Write", "Edit", "Bash", "Monitor", "Grep", "Glob", "Agent"],
-        system_prompt={"type": "preset", "preset": "claude_code"},
+        system_prompt=_system_prompt,
         setting_sources=["project"],
         model=model,
         effort=effort,
