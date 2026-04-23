@@ -59,7 +59,9 @@ def post_issue_comment(repo: str, issue_number: int, body: str) -> None:
     gh(["issue", "comment", str(issue_number), "--repo", repo, "--body", body])
 
 
-def create_pull_request(repo: str, branch: str, title: str, body: str) -> str:
+def create_pull_request(
+    repo: str, branch: str, title: str, body: str, base: str = settings.pr_base_branch
+) -> str:
     """Create a PR and return its URL."""
     return gh(
         [
@@ -68,7 +70,7 @@ def create_pull_request(repo: str, branch: str, title: str, body: str) -> str:
             "--repo",
             repo,
             "--base",
-            settings.pr_base_branch,
+            base,
             "--head",
             branch,
             "--title",

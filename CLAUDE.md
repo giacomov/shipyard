@@ -8,13 +8,13 @@ Detailed documentation lives in `docs/`. Before making changes, read the relevan
 
 | Doc | Covers |
 |-----|--------|
-| `docs/ARCHITECTURE.md` | Component diagram, data flow, package layout |
-| `docs/cli.md` | All seven CLI commands with flags and examples |
-| `docs/agent-pipeline.md` | Three-agent pipeline, retry logic, failure handling |
-| `docs/task-format.md` | Markdown plan syntax, JSON schemas |
-| `docs/github-integration.md` | Issues, sub-issues, blocked-by, labels, permissions |
-| `docs/workflow.md` | `epic-driver.yml` and `plan-driver.yml` jobs, secrets, data flow |
-| `docs/agent-prompts.md` | Prompt files, placeholder substitution, customization |
+| `docs/explanation/architecture.md` | Problem, component overview, codemap, invariants |
+| `docs/reference/cli.md` | All eight CLI commands with flags and examples |
+| `docs/explanation/agent-pipeline.md` | Three-agent pipeline, retry logic, failure handling |
+| `docs/reference/task-format.md` | Markdown plan syntax, JSON schemas |
+| `docs/explanation/github-integration.md` | Issues, sub-issues, blocked-by, labels, permissions |
+| `docs/reference/workflow.md` | `epic-driver.yml`, `plan-driver.yml`, `sync-driver.yml` jobs, secrets, data flow |
+| `docs/reference/agent-prompts.md` | Prompt files, placeholder substitution, customization |
 
 ## Commands
 
@@ -72,14 +72,14 @@ Shipyard is a CLI tool + bundled GitHub Actions workflow that turns a markdown i
 
 **Local phase (developer machine):**
 1. `shipyard tasks` parses a markdown plan (`### Task N:` blocks with `**Depends on:**` lines) into `tasks.json`.
-2. `shipyard sync` creates GitHub Issues from that JSON: one epic issue, one sub-issue per task, sub-issue links, `blocked-by` dependency edges, and the `in-progress` label on the epic.
+2. `shipyard sync` creates GitHub Issues from that JSON: one epic issue, one sub-issue per task, sub-issue links, `blocked-by` dependency edges, and the `in-progress` label on the epic. Also creates and pushes the `shipyard/epic-<N>` branch used as the base for implementation PRs.
 
 **CI phase (GitHub Actions, triggered by label/PR/dispatch):**
 1. `find-work` job: `shipyard find-work` reads event context from env vars, resolves the active epic, fetches open sub-issues, filters to those with no open blockers, and writes a `work_json` payload to `$GITHUB_OUTPUT`.
 2. `execute` job (three steps):
    - Creates the feature branch (`shipyard/epic-<N>-run-<RUN_ID>`).
    - `shipyard execute` reads `$WORK_JSON` and runs a **three-agent pipeline** (implementer → spec reviewer → code quality reviewer) for each unblocked issue sequentially. Writes `shipyard-results.json`.
-   - `shipyard publish-execution` pushes the branch and opens a PR against `main` (runs with `if: always()` so partial results are always published).
+   - `shipyard publish-execution` pushes the branch and opens a PR against the epic branch (runs with `if: always()` so partial results are always published).
 
 ### Package layout
 
@@ -99,15 +99,15 @@ shipyard/
   utils/
     git.py             # git subprocess wrappers
     gh.py              # gh CLI wrappers + GitHub output helpers
+    github_event.py    # extract-github-event command + event parsing helpers
 ```
 
 ### Agent pipeline (`execute.py`)
 
-- Uses `claude_agent_sdk.query()` (async generator) with `bypassPermissions` mode and tools `Bash, Read, Write, Edit, Glob, Grep`.
-- For each issue: records `base_sha`, runs implementer → parses `ImplementerStatus` from the last lines of output → runs spec reviewer → runs code quality reviewer. Both reviewers must return `APPROVED` (verdict parsed by `parse_review_verdict()`).
-- On review failure with retries remaining: `git reset --hard base_sha` and re-run implementer with the reviewer feedback injected into `{CONTEXT}`.
-- On terminal failure: reset, post a GitHub Issue comment with `<!-- shipyard-executor: REASON -->` tag, continue to next issue.
-- `max_retries=1` → up to 2 total attempts per issue.
+- Uses `ClaudeSDKClient` with `dontAsk` permission mode and tools `Bash, Read, Write, Edit, Glob, Grep, Agent, Monitor`.
+- For each issue: records `base_sha`, then drives a single session with sequential `query()` calls: implement → commit → invoke spec reviewer sub-agent (fix & retry within session until approved) → invoke code quality reviewer sub-agent (fix & retry within session until approved) → run tests.
+- Spec reviewer and code quality reviewer are registered as named `AgentDefinition` sub-agents that the implementer invokes via the `Agent` tool.
+- On terminal failure (exception): `git reset --hard base_sha`, post a GitHub Issue comment with `<!-- shipyard-executor: REASON -->` tag, continue to next issue.
 - `reset_fn` and `comment_fn` are injectable callbacks (default to no-ops), making the pipeline testable without live git/GH state.
 
 ### GitHub data model
@@ -119,4 +119,4 @@ GitHub Issues are the only persistent store — no database. The epic issue is t
 - `find_work.py`, `execute.py`, `plan.py`, and `publish.py` are CI-only (driven entirely by env vars, no interactive options).
 - All GitHub API calls in `sync.py` and `find_work.py` go through the `gh` CLI as subprocesses.
 - The bundled workflow templates use `SHIPYARD_VERSION` as a placeholder; `shipyard init` substitutes it with the package version (or `main` when `--from-main` is passed).
-- PRs are always opened against `main` (hardcoded in `utils/gh.py:create_pull_request`).
+- PRs are opened against the epic base branch passed via `--base-branch` to `shipyard publish-execution` (default: `settings.pr_base_branch`, which is `main`).

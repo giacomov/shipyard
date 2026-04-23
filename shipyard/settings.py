@@ -29,5 +29,10 @@ class Settings(BaseSettings):
     revision_model: str = "sonnet"
     revision_effort: EffortLevel = "high"
 
+    doc_model: str = "sonnet"
+    doc_effort: EffortLevel = "high"
+    doc_review_model: str = "sonnet"
+    doc_review_effort: EffortLevel = "high"
+
 
 settings = Settings()

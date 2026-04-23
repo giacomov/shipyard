@@ -1,8 +1,8 @@
-# GitHub Integration
+# GitHub integration
 
 Shipyard uses GitHub Issues as its persistent task board. This document explains how `shipyard sync` creates the board, how `shipyard find-work` reads it, and what GitHub permissions are required.
 
-## How `shipyard sync` Creates the Board
+## How `shipyard sync` creates the board
 
 `sync` makes a sequence of `gh` CLI calls:
 
@@ -22,11 +22,11 @@ Shipyard uses GitHub Issues as its persistent task board. This document explains
 5. **Apply `in-progress` label to the epic** — `gh issue edit {epic} --add-label in-progress`
    - Creates the label (color `0075ca`) if it does not already exist.
 
-### `in-progress` Label Convention
+### `in-progress` label convention
 
 The `in-progress` label on the epic issue is the signal that `find-work` uses to identify active epics. Applying this label also triggers the `epic-driver.yml` workflow (via the `issues: labeled` event). Removing it (or closing the epic) stops the automation.
 
-## How `shipyard find-work` Resolves the Epic
+## How `shipyard find-work` resolves the epic
 
 The resolution strategy depends on `$EVENT_NAME`:
 
@@ -46,7 +46,7 @@ When a PR is merged, `find-work` needs to determine which epic it belongs to:
 
 If no epic is found, `has_work` is set to `false` and the workflow exits cleanly.
 
-## How Unblocked Tasks Are Determined
+## How unblocked tasks are determined
 
 Once the epic is resolved, `find-work` calls:
 
@@ -64,7 +64,7 @@ A sub-issue is **unblocked** if none of its blockers have `state == "open"`. Onl
 
 This means: when a PR implementing issue #11 is merged and #11 closes, the next `find-work` run will find #12 (which was blocked by #11) as newly unblocked.
 
-## Required GitHub Permissions
+## Required GitHub permissions
 
 ### For `shipyard sync` (local / CI)
 

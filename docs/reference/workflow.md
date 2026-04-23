@@ -1,6 +1,6 @@
-# Workflows
+# Workflows reference
 
-Shipyard installs two GitHub Actions workflows via `shipyard init`.
+Shipyard installs three GitHub Actions workflows via `shipyard init`.
 
 ---
 
@@ -29,9 +29,9 @@ The `find-work` job has an additional `if:` guard to ignore irrelevant events:
 - `pull_request` events: only when the PR was actually merged (`merged == true`).
 - `workflow_dispatch`: always.
 
-### How `shipyard init` Works
+### How `shipyard init` works
 
-`shipyard init [PATH]` copies both templates from the installed package and substitutes `SHIPYARD_VERSION`:
+`shipyard init [PATH]` copies all three templates from the installed package and substitutes `SHIPYARD_VERSION`:
 
 ```python
 install_ref = "main"  # if --from-main, else the package version e.g. "0.1.0"
@@ -46,7 +46,7 @@ run: uv tool install "git+https://github.com/giacomov/shipyard@0.1.0"
 
 Use `--from-main` to install from the HEAD of `main` instead of a pinned tag. Use `--force` to overwrite existing files. Use `--skip-plan-driver` to only install `epic-driver.yml`.
 
-### Job Structure
+### Job structure
 
 #### Job 1: `find-work`
 
@@ -78,11 +78,12 @@ Steps:
 2. Configure git identity (`github-actions[bot]`).
 3. Set up uv.
 4. `uv tool install git+https://github.com/giacomov/shipyard@<ref>`.
-5. **Create implementation branch** — reads `$WORK_JSON` to get the epic number, creates `shipyard/epic-<N>-run-<RUN_ID>`, and sets `$SHIPYARD_BRANCH` in the environment.
-6. **Run agent pipeline** — `shipyard execute` runs the three-agent pipeline for each unblocked issue and writes `shipyard-results.json`.
-7. **Push branch and open PR** (`if: always()`) — `shipyard publish-execution --branch "$SHIPYARD_BRANCH"` pushes the branch and opens a PR if any issues succeeded. Runs even if `shipyard execute` exits non-zero, so partial results are always published.
+5. **Write work JSON** — writes the `work_json` output from `find-work` into `work.json`.
+6. **Create implementation branch** — reads `work.json` to get the epic number, fetches the existing `shipyard/epic-<N>` branch (created by `shipyard sync`), and creates a new `shipyard/epic-<N>-run-<RUN_ID>` branch from it. Sets `$SHIPYARD_BRANCH` (the run branch) and `$SHIPYARD_EPIC_BRANCH` (the epic base branch) in the environment.
+7. **Run agent pipeline** — `shipyard execute -i work.json` runs the three-agent pipeline for each unblocked issue and writes `shipyard-results.json`.
+8. **Push branch and open PR** (`if: always()`) — `shipyard publish-execution --branch "$SHIPYARD_BRANCH" --base-branch "$SHIPYARD_EPIC_BRANCH" -i work.json` pushes the branch and opens a PR against the epic branch if any issues succeeded. Runs even if `shipyard execute` exits non-zero, so partial results are always published.
 
-### How Data Flows Between Jobs
+### How data flows between jobs
 
 The two jobs communicate via GitHub Actions step outputs:
 
@@ -100,7 +101,7 @@ WORK_JSON: ${{ needs.find-work.outputs.work_json }}
 
 Within the `execute` job, `shipyard execute` writes `shipyard-results.json` which `shipyard publish-execution` reads in the next step.
 
-### Required Secrets
+### Required secrets
 
 | Secret | Description |
 |--------|-------------|
@@ -126,13 +127,13 @@ on:
 
 The `plan` job guards on `github.event.label.name == 'plan'` (for issues) or `github.event.review.state == 'CHANGES_REQUESTED'` (for reviews).
 
-### Job Structure
+### Job structure
 
 #### Job: `plan`
 
 ```
 runs-on: ubuntu-latest
-permissions: contents: write, pull-requests: write, issues: read, id-token: write
+permissions: contents: write, pull-requests: write, issues: write, id-token: write
 ```
 
 Steps:
@@ -144,7 +145,7 @@ Steps:
 6. **Generate or update plan** — `shipyard plan` runs the planning agent and writes `plans/i<N>.md`. On re-plan, also passes `--existing-plan-path` and `--review-feedback-file`.
 7. **Commit and publish plan** — commits the plan file and either pushes a new branch + opens a draft PR (initial plan) or force-pushes to the existing branch (re-plan).
 
-### Plan vs. Re-plan
+### Plan vs. re-plan
 
 | Mode | Trigger | Branch | PR |
 |------|---------|--------|----|
@@ -153,8 +154,48 @@ Steps:
 
 ---
 
+## `sync-driver.yml`
+
+Automatically converts a merged plan PR into GitHub Issues. Triggered when a PR labeled `plan` is merged.
+
+### Triggers
+
+```yaml
+on:
+  pull_request:
+    types: [closed]
+```
+
+The `sync` job guards on `merged == true` and the PR having the `plan` label.
+
+### Job structure
+
+#### Job: `sync`
+
+```
+runs-on: ubuntu-latest
+permissions: contents: read, issues: write, id-token: write
+```
+
+Steps:
+1. `actions/checkout@v4` — checks out the base branch (main) so the merged plan file is available.
+2. Set up uv and install shipyard.
+3. **Extract issue number** — parses the branch name (`plan/i<N>`) to get `N`.
+4. **Generate `tasks.json`** — `shipyard tasks -i plans/i<N>.md -o tasks.json` runs the task-parsing agent to convert the plan into structured JSON.
+5. **Sync to GitHub Issues** — `shipyard sync -i tasks.json --no-in-progress-label` creates the epic issue and sub-issues. The `--no-in-progress-label` flag skips the label so the epic automation does not start automatically; the developer adds it manually when ready.
+
+### Required secrets
+
+| Secret | Description |
+|--------|-------------|
+| `CLAUDE_CODE_OAUTH_TOKEN` | OAuth token for the `shipyard tasks` planning agent |
+
+`GH_TOKEN` is provided automatically.
+
+---
+
 ## Dogfooding
 
-The shipyard repository itself uses both workflows to implement its own features. The workflows in `.github/workflows/` were generated by running `shipyard init` and point to the version of shipyard currently in use. Plans are written using `planner.md`, converted to issues via `shipyard tasks` + `shipyard sync`, and implemented autonomously via `epic-driver.yml`.
+The shipyard repository itself uses all three workflows to implement its own features. The workflows in `.github/workflows/` were generated by running `shipyard init` and point to the version of shipyard currently in use. Plans are written and labeled `plan` to trigger `plan-driver.yml`, merged to trigger `sync-driver.yml`, and implemented autonomously via `epic-driver.yml`.
 
 See the most recent commits for examples of shipyard-generated PRs.

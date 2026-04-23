@@ -28,7 +28,8 @@ from shipyard.utils.git import push
     type=click.Path(exists=True),
     help="Results JSON written by shipyard execute",
 )
-def publish_execution(branch: str, input_file: str, results_file: str) -> None:
+@click.option("--base-branch", default=settings.pr_base_branch, help="Base branch for the PR")
+def publish_execution(branch: str, input_file: str, results_file: str, base_branch: str) -> None:
     """Push the implementation branch and open a PR."""
     results = json.loads(Path(results_file).read_text())
     successful_task_ids: list[str] = results.get("successful", [])
@@ -46,5 +47,5 @@ def publish_execution(branch: str, input_file: str, results_file: str) -> None:
 
     pr_title = f"shipyard: implement {len(successful_task_ids)} task(s) from epic #{work.epic_id}"
     pr_body = close_issues_body(successful_issue_numbers)
-    pr_url = create_pull_request(repo, branch, pr_title, pr_body)
+    pr_url = create_pull_request(repo, branch, pr_title, pr_body, base=base_branch)
     print(f"PR created: {pr_url}")

@@ -1,8 +1,8 @@
-# Task Format
+# Task format reference
 
 This document describes the markdown plan syntax, the JSON schemas produced and consumed by shipyard, and a complete round-trip example.
 
-## Markdown Plan Syntax
+## Markdown plan syntax
 
 A plan is a single `.md` file with the following structure:
 
@@ -36,7 +36,7 @@ the agent sees — no hand-waving.
 Description...
 ```
 
-### Parsing Rules
+### Parsing rules
 
 | Element | Rule |
 |---------|------|
@@ -50,7 +50,7 @@ Description...
 - Dependency values are extracted by regex: `Task\s+(\d+)` (case-insensitive).
 - Unknown dependency IDs cause a validation error before any JSON is emitted.
 
-## JSON Task Schema
+## JSON task schema
 
 Output of `shipyard tasks`. This is also the input format for `shipyard sync`.
 
@@ -77,7 +77,7 @@ Output of `shipyard tasks`. This is also the input format for `shipyard sync`.
 - `status` is always `"pending"` when output by `shipyard tasks`; it is informational and not used by `shipyard sync`.
 - `description` at the top level contains the full markdown plan content.
 
-## Work JSON Schema
+## Work JSON schema
 
 Output of `shipyard find-work`. This is the input to `shipyard execute` via `$WORK_JSON`. It uses the same `SubtaskList` / `Subtask` schema as `tasks.json`, with `epic_id` and `task_id` set to stringified GitHub issue numbers.
 
@@ -100,9 +100,9 @@ Output of `shipyard find-work`. This is the input to `shipyard execute` via `$WO
 
 `tasks` contains only **open, unblocked** sub-issues (no open blockers).
 
-## Round-Trip Example
+## Round-trip example
 
-### 1. Markdown Plan (`plan.md`)
+### 1. Markdown plan (`plan.md`)
 
 ```markdown
 # Sample Feature Implementation Plan
@@ -181,7 +181,7 @@ Creates:
 - Sub-issue #11: "Setup"
 - Sub-issue #12: "Implementation" — blocked by #11
 
-### 4. Work Payload (produced by `find-work` after #11 is closed)
+### 4. Work payload (produced by `find-work` after #11 is closed)
 
 ```json
 {

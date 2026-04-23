@@ -81,9 +81,13 @@ jobs:
       - name: Create implementation branch
         run: |
           EPIC=$(python3 -c "import json; print(json.load(open('work.json'))['epic_id'])")
-          BRANCH="shipyard/epic-${EPIC}-run-${{ github.run_id }}"
+          EPIC_BRANCH="shipyard/epic-${EPIC}"
+          BRANCH="${EPIC_BRANCH}-run-${{ github.run_id }}"
+          git fetch origin "$EPIC_BRANCH"
+          git checkout "$EPIC_BRANCH"
           git checkout -b "$BRANCH"
           echo "SHIPYARD_BRANCH=$BRANCH" >> "$GITHUB_ENV"
+          echo "SHIPYARD_EPIC_BRANCH=$EPIC_BRANCH" >> "$GITHUB_ENV"
 
       - name: Run agent pipeline
         env:
@@ -95,4 +99,4 @@ jobs:
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
-        run: shipyard publish-execution --branch "$SHIPYARD_BRANCH" -i work.json
+        run: shipyard publish-execution --branch "$SHIPYARD_BRANCH" --base-branch "$SHIPYARD_EPIC_BRANCH" -i work.json

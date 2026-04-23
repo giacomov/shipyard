@@ -9,6 +9,7 @@ from shipyard.commands.plan import plan
 from shipyard.commands.publish import publish_execution
 from shipyard.commands.sync import sync
 from shipyard.commands.tasks import tasks
+from shipyard.commands.update_docs import update_docs
 from shipyard.utils.github_event import extract_github_event
 
 
@@ -25,3 +26,4 @@ main.add_command(execute)
 main.add_command(plan)
 main.add_command(publish_execution, name="publish-execution")
 main.add_command(extract_github_event, name="extract-github-event")
+main.add_command(update_docs, name="update-docs")

@@ -1,6 +1,6 @@
-# CLI Reference
+# CLI reference
 
-Shipyard exposes seven commands through the `shipyard` entry point.
+Shipyard exposes eight commands through the `shipyard` entry point.
 
 ```
 shipyard --help
@@ -12,7 +12,7 @@ shipyard --help
 
 Set up the Shipyard workflows in a repository.
 
-**Purpose:** Copies the bundled `epic-driver.yml` and `plan-driver.yml` templates into `.github/workflows/` and substitutes `SHIPYARD_VERSION` with the installed package version (or `main` when `--from-main` is set).
+**Purpose:** Copies the bundled `epic-driver.yml`, `plan-driver.yml`, and `sync-driver.yml` templates into `.github/workflows/` and substitutes `SHIPYARD_VERSION` with the installed package version (or `main` when `--from-main` is set).
 
 **Arguments and flags:**
 
@@ -20,10 +20,10 @@ Set up the Shipyard workflows in a repository.
 |------|------|-------------|
 | `PATH` | positional argument | Target repository directory (default: `.`) |
 | `--force` | flag | Overwrite existing workflow files |
-| `--skip-plan-driver` | flag | Only install `epic-driver.yml`, skip `plan-driver.yml` |
+| `--skip-plan-driver` | flag | Only install `epic-driver.yml`, skip `plan-driver.yml` and `sync-driver.yml` |
 | `--from-main` | flag | Install shipyard from HEAD of `main` instead of the pinned version |
 
-**Outputs:** Creates `.github/workflows/epic-driver.yml` (and `plan-driver.yml` unless skipped) in the target directory.
+**Outputs:** Creates `.github/workflows/epic-driver.yml`, `plan-driver.yml`, and `sync-driver.yml` (the latter two skipped when `--skip-plan-driver` is set) in the target directory.
 
 **Example:**
 
@@ -58,21 +58,22 @@ Parse a markdown plan into task JSON.
 
 | Flag | Description |
 |------|-------------|
-| `-i`, `--input FILE` | Input markdown file (default: stdin) |
+| `-i`, `--input FILE` | Input markdown file (required) |
+| `-t`, `--title TEXT` | Plan title (required) |
 | `-o`, `--output FILE` | Output JSON file (default: stdout) |
 
 **Inputs:** A markdown plan file. See [task-format.md](task-format.md) for the exact syntax.
 
-**Outputs:** A JSON object with `title`, `body`, and `tasks[]`. See [task-format.md](task-format.md) for the schema.
+**Outputs:** A JSON object with `title`, `description`, and `tasks[]`. See [task-format.md](task-format.md) for the schema.
 
 **Example:**
 
 ```bash
 # Parse to file
-shipyard tasks -i plan.md -o tasks.json
+shipyard tasks -i plan.md -t "My Feature Plan" -o tasks.json
 
-# Parse from stdin, inspect on stdout
-cat plan.md | shipyard tasks | jq '.tasks | length'
+# Parse and inspect on stdout
+shipyard tasks -i plan.md -t "My Feature Plan" | jq '.tasks | length'
 ```
 
 Exits non-zero if dependency references are invalid (e.g., a task depends on a non-existent task ID).
@@ -92,10 +93,11 @@ Sync task JSON to GitHub Issues.
 | `-i`, `--input FILE` | Input `tasks.json` (default: stdin) |
 | `--repo OWNER/REPO` | Target repository (default: auto-detected via `gh repo view`) |
 | `--dry-run` | Print all planned API calls without executing them |
+| `--no-in-progress-label` | Skip adding the `in-progress` label to the epic issue |
 
 **Inputs:** The JSON produced by `shipyard tasks`.
 
-**Outputs:** Prints progress to stdout. On success, prints URLs for the epic and each task issue.
+**Outputs:** Prints progress to stdout. On success, prints URLs for the epic and each task issue, and creates and pushes the `shipyard/epic-<N>` branch that the CI workflow will use as the base for implementation PRs.
 
 **Example:**
 
@@ -185,7 +187,7 @@ Find unblocked sub-issues for the current epic.
 | `has_work` | `"true"` or `"false"` |
 | `work_json` | JSON payload for `shipyard execute` (only when `has_work=true`) |
 
-**Not intended for direct use outside CI.** See [github-integration.md](github-integration.md) for epic resolution details.
+**Not intended for direct use outside CI.** See [github-integration.md](../explanation/github-integration.md) for epic resolution details.
 
 ---
 
@@ -193,24 +195,32 @@ Find unblocked sub-issues for the current epic.
 
 Run the three-agent pipeline for unblocked issues.
 
-**Purpose:** Reads the work payload from `$WORK_JSON` and runs the implementer → spec reviewer → code quality reviewer pipeline for each issue sequentially. Writes results to `shipyard-results.json` for the subsequent `publish-execution` step. Called by the `execute` job in `epic-driver.yml`.
+**Purpose:** Runs the implementer → spec reviewer → code quality reviewer pipeline for each issue sequentially. Writes results to `shipyard-results.json` for the subsequent `publish-execution` step. Called by the `execute` job in `epic-driver.yml`.
 
-**Configuration:** Entirely via environment variables:
+**Flags:**
 
-| Variable | Description |
-|----------|-------------|
-| `WORK_JSON` | JSON payload from `shipyard find-work` |
-| `CLAUDE_CODE_OAUTH_TOKEN` | OAuth token for Claude Code agents |
+| Flag | Description |
+|------|-------------|
+| `-i`, `--input FILE` | Work JSON file (`SubtaskList`) from `shipyard find-work` (normal mode) |
+| `--review-feedback-file FILE` | Review feedback file (revision mode) |
+| `--prompt-file FILE` | Original task context file (revision mode) |
+
+**Modes:**
+
+- **Normal mode** (`-i`): reads the work payload and processes each unblocked task sequentially.
+- **Revision mode** (`--review-feedback-file` + `--prompt-file`): addresses PR review feedback for a single previously-implemented task.
+
+**Configuration:** The `CLAUDE_CODE_OAUTH_TOKEN` environment variable must be set for the Claude Code agents.
 
 **Outputs:**
 
-- Writes `shipyard-results.json` with `{ "successful": [<issue numbers>], "failed": [<issue numbers>] }`.
+- Writes `shipyard-results.json` with `{ "successful": [<task ids>], "failed": [<task ids>] }`.
 - Posts a comment on each failed issue explaining why it was skipped.
 - Exits non-zero if any issues failed.
 
 Does **not** create a branch, push, or open a PR — that is handled by `shipyard publish-execution`.
 
-**Not intended for direct use outside CI.** See [agent-pipeline.md](agent-pipeline.md) for pipeline details.
+**Not intended for direct use outside CI.** See [agent-pipeline.md](../explanation/agent-pipeline.md) for pipeline details.
 
 ---
 
@@ -218,23 +228,51 @@ Does **not** create a branch, push, or open a PR — that is handled by `shipyar
 
 Push the implementation branch and open a pull request.
 
-**Purpose:** Reads `shipyard-results.json` written by `shipyard execute`, pushes the branch, and opens a PR against `main` that closes all successfully-implemented issues. Skips silently if no issues succeeded. Called as the final step of the `execute` job in `epic-driver.yml`, with `if: always()` so it runs even if `shipyard execute` exits non-zero.
+**Purpose:** Reads `shipyard-results.json` written by `shipyard execute`, pushes the branch, and opens a PR that closes all successfully-implemented issues. Skips silently if no issues succeeded. Called as the final step of the `execute` job in `epic-driver.yml`, with `if: always()` so it runs even if `shipyard execute` exits non-zero.
 
 **Flags:**
 
 | Flag | Description |
 |------|-------------|
 | `--branch TEXT` | Branch to push (required) |
-| `--results-file FILE` | Path to results JSON (default: `shipyard-results.json`) |
-
-**Configuration:** Also reads `$WORK_JSON` for repo and epic metadata.
+| `-i`, `--input FILE` | Work JSON file (`SubtaskList`) produced by `shipyard find-work` (required) |
+| `--results-file FILE` | Path to results JSON (default: value of `SHIPYARD_RESULTS_FILE`, fallback `shipyard-results.json`) |
+| `--base-branch TEXT` | Base branch for the PR (default: value of `SHIPYARD_PR_BASE_BRANCH`, fallback `main`) |
 
 **Outputs:**
 
 - Pushes the branch to origin.
-- Opens a PR titled `shipyard: implement N issue(s) from epic #<N>` with `Closes #<n>` lines for each successful issue.
+- Opens a PR titled `shipyard: implement N task(s) from epic #<N>` with `Closes #<n>` lines for each successful task.
 - Prints the PR URL to stdout.
 
-> **Note:** The PR base branch is hardcoded to `main`. Repositories whose default branch has a different name must edit the workflow's `publish-execution` step accordingly.
+**Not intended for direct use outside CI.**
+
+---
+
+## `shipyard extract-github-event` (CI only)
+
+Parse a GitHub Actions event and write structured outputs for use in subsequent workflow steps.
+
+**Purpose:** Reads the event JSON at `$GITHUB_EVENT_PATH`, determines the trigger type (issue labeled `plan`, or pull request review with `CHANGES_REQUESTED`), fetches any needed issue/PR context via `gh`, and writes structured outputs to `$GITHUB_OUTPUT`. Also writes `prompt.txt` (and optionally `review-feedback.txt`) for `shipyard plan`. Called by the `plan` job in `plan-driver.yml`.
+
+**Configuration:** Entirely via environment variables (set by the workflow):
+
+| Variable | Description |
+|----------|-------------|
+| `GITHUB_EVENT_PATH` | Path to the event JSON (set automatically by Actions) |
+| `GITHUB_REPOSITORY` | `owner/repo` (set automatically by Actions) |
+
+**Outputs (to `$GITHUB_OUTPUT`):**
+
+| Key | Populated when |
+|-----|----------------|
+| `issue_number` | Issue labeled `plan`, or re-plan of a plan PR |
+| `issue_title` | Issue labeled `plan`, or re-plan of a plan PR |
+| `has_review` | Always (`"true"` or `"false"`) |
+| `pr_number` | Review event only |
+| `branch_name` | Review event only |
+| `review_target` | Review event only (`"plan"` or `"implementation"`) |
+
+**Side effects:** Writes `prompt.txt` containing the issue/task context for `shipyard plan`. On review events, also writes `review-feedback.txt` combining the review summary and inline comments.
 
 **Not intended for direct use outside CI.**

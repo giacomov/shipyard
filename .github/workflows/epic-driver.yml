@@ -32,12 +32,10 @@ jobs:
       work_json: ${{ steps.find-work.outputs.work_json }}
 
     steps:
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v4
 
       - name: Install shipyard
-        run: pip install shipyard==0.1.0
+        run: uv tool install "git+https://github.com/giacomov/shipyard@0.1.0"
 
       - name: Find epic and unblocked issues
         id: find-work
@@ -70,39 +68,82 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Install Claude Code CLI
-        run: npm install -g @anthropic-ai/claude-code
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v4
 
       - name: Install shipyard
-        run: pip install shipyard==0.1.0
+        run: uv tool install "git+https://github.com/giacomov/shipyard@0.1.0"
 
-      - name: Create implementation branch
+      - name: Write work JSON to file
         env:
           WORK_JSON: ${{ needs.find-work.outputs.work_json }}
+        run: python3 -c "import os; open('work.json','w').write(os.environ['WORK_JSON'])"
+
+      - name: Create implementation branch
         run: |
-          EPIC=$(python3 -c "import json,os; print(json.loads(os.environ['WORK_JSON'])['epic_number'])")
-          BRANCH="shipyard/epic-${EPIC}-run-${{ github.run_id }}"
+          EPIC=$(python3 -c "import json; print(json.load(open('work.json'))['epic_id'])")
+          EPIC_BRANCH="shipyard/epic-${EPIC}"
+          BRANCH="${EPIC_BRANCH}-run-${{ github.run_id }}"
+          git fetch origin "$EPIC_BRANCH"
+          git checkout "$EPIC_BRANCH"
           git checkout -b "$BRANCH"
           echo "SHIPYARD_BRANCH=$BRANCH" >> "$GITHUB_ENV"
+          echo "SHIPYARD_EPIC_BRANCH=$EPIC_BRANCH" >> "$GITHUB_ENV"
 
       - name: Run agent pipeline
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           GH_TOKEN: ${{ github.token }}
-          WORK_JSON: ${{ needs.find-work.outputs.work_json }}
-        run: shipyard execute
+        run: shipyard execute -i work.json
 
       - name: Push branch and open pull request
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
-          WORK_JSON: ${{ needs.find-work.outputs.work_json }}
-        run: shipyard publish-execution --branch "$SHIPYARD_BRANCH"
+        run: shipyard publish-execution --branch "$SHIPYARD_BRANCH" --base-branch "$SHIPYARD_EPIC_BRANCH" -i work.json
+
+  update-docs:
+    name: Update documentation
+    needs: find-work
+    if: |
+      needs.find-work.outputs.has_work == 'false' &&
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+
+      - uses: astral-sh/setup-uv@v4
+
+      - name: Install shipyard
+        run: uv tool install "git+https://github.com/giacomov/shipyard@0.1.0"
+
+      - name: Check out epic branch and compute base SHA
+        run: |
+          EPIC_BRANCH="${{ github.event.pull_request.head.ref }}"
+          git fetch origin "$EPIC_BRANCH"
+          git checkout "$EPIC_BRANCH"
+          BASE_SHA=$(git merge-base "origin/${{ github.event.pull_request.base.ref }}" HEAD)
+          echo "BASE_SHA=$BASE_SHA" >> "$GITHUB_ENV"
+          echo "EPIC_BRANCH=$EPIC_BRANCH" >> "$GITHUB_ENV"
+
+      - name: Run documentation agent
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: shipyard update-docs --base-sha "$BASE_SHA"
+
+      - name: Push documentation changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: git push origin "$EPIC_BRANCH"

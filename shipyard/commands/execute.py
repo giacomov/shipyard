@@ -76,7 +76,7 @@ async def _run_issue_pipeline_inner(
     ]
 
     task_description = f"Task {task.task_id}: {task.title}\n\n{task.description}"
-    context = f"Epic: {work.title}\n\n{tasks_context}"
+    context = f"Epic: {work.title}\n\n" + "\n".join(tasks_context)
 
     implementer_prompt = (
         _res_files("shipyard.data.prompts")

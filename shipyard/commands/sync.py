@@ -13,6 +13,7 @@ import pydantic
 from shipyard.schemas import Subtask, SubtaskList
 from shipyard.settings import settings
 from shipyard.utils.gh import gh, resolve_repo
+from shipyard.utils.git import checkout_new_branch, push
 
 
 @dataclass
@@ -239,9 +240,24 @@ def run_sync(task_list: SubtaskList, repo: str, dry_run: bool, skip_label: bool 
             print(f"   WARNING: could not add in-progress label: {e}")
             failures.append(f"add in-progress label: {e}")
 
-    # 6. Summary
+    # 6. Create and push epic branch
+    epic_branch = f"shipyard/epic-{parent.number}"
+    click.echo(f"\n── Creating epic branch: {epic_branch}")
+    if not dry_run:
+        try:
+            checkout_new_branch(epic_branch)
+            push(epic_branch, set_upstream=True)
+            click.echo(f"   → pushed {epic_branch}")
+        except RuntimeError as e:
+            click.echo(f"   WARNING: could not create/push epic branch: {e}")
+            failures.append(f"create epic branch: {e}")
+    else:
+        click.echo(f"   [dry-run] Would create and push branch: {epic_branch}")
+
+    # 7. Summary
     print("\n── Summary")
     if not dry_run:
+        print(f"   Epic branch:  {epic_branch}")
         print(f"   Parent issue: https://github.com/{repo}/issues/{parent.number}")
         for subtask in tasks:
             entry = issue_map.get(subtask.task_id)
