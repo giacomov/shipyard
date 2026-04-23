@@ -88,17 +88,17 @@ Steps:
 ```
 runs-on: ubuntu-latest
 needs: find-work
-if: has_work == 'false' && pull_request.merged == true
+if: has_work == 'false' && event_name == 'pull_request' && pull_request.merged == true
 permissions: contents: write, id-token: write
 ```
 
-Runs when a PR merges into the epic branch and there is no remaining work (`has_work == 'false'`). This signals that the epic is complete.
+Runs when a PR merges and there is no remaining work (`has_work == 'false'`). This signals that the epic is complete.
 
 Steps:
 1. `actions/checkout@v4` with `fetch-depth: 0`.
 2. Configure git identity (`github-actions[bot]`).
 3. Set up uv and install shipyard.
-4. **Check out epic branch and compute base SHA** — fetches the epic branch, checks it out, and computes `BASE_SHA` as the merge-base between the epic branch and the main branch. This SHA covers the full cumulative diff of the epic.
+4. **Check out epic branch and compute base SHA** — fetches the epic branch, checks it out, and computes `BASE_SHA` as the merge-base between the epic branch and the PR's base branch (`github.event.pull_request.base.ref`). This SHA covers the full cumulative diff of the epic.
 5. **Run documentation agent** — `shipyard update-docs --base-sha "$BASE_SHA"` runs the doc agent over the cumulative diff, commits changes, then iterates with the `doc_verifier` sub-agent until it outputs LGTM.
 6. **Push documentation changes** — pushes the updated epic branch to origin.
 
@@ -200,7 +200,7 @@ Steps:
 1. `actions/checkout@v4` — checks out the base branch (main) so the merged plan file is available.
 2. Set up uv and install shipyard.
 3. **Extract issue number** — parses the branch name (`plan/i<N>`) to get `N`.
-4. **Generate `tasks.json`** — `shipyard tasks -i plans/i<N>.md -o tasks.json` runs the task-parsing agent to convert the plan into structured JSON.
+4. **Generate `tasks.json`** — `shipyard tasks -i plans/i<N>.md --title "Implementation: <ISSUE_TITLE>" -o tasks.json` runs the task-parsing agent to convert the plan into structured JSON.
 5. **Sync to GitHub Issues** — `shipyard sync -i tasks.json --no-in-progress-label` creates the epic issue and sub-issues. The `--no-in-progress-label` flag skips the label so the epic automation does not start automatically; the developer adds it manually when ready.
 
 ### Required secrets

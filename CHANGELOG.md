@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Added `shipyard update-docs` command (CI only): runs a documentation agent over the cumulative epic diff and iterates with a verifier sub-agent until it outputs LGTM, then commits the result to the epic branch.
+- Added `shipyard update-docs` command (CI only): runs a documentation agent over the cumulative epic diff, commits the result, then iterates with a verifier sub-agent until it outputs LGTM.
 - Added `update-docs` job to `epic-driver.yml`: triggers when the last PR in an epic is merged and no remaining work exists, then runs `shipyard update-docs` and pushes documentation changes.
 - Added `doc_agent.md` and `doc-verifier.md` prompts for the documentation agent and its verifier sub-agent.
 - Added `SHIPYARD_DOC_MODEL`, `SHIPYARD_DOC_EFFORT`, `SHIPYARD_DOC_REVIEW_MODEL`, and `SHIPYARD_DOC_REVIEW_EFFORT` settings to control the documentation agent's model and effort level.

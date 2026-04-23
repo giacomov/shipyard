@@ -10,7 +10,7 @@ Shipyard solves the coordination problem in agentic coding: given a multi-task i
 
 **Implementation (CI, execute job):** Work JSON → `shipyard execute` runs a three-agent pipeline (implementer → spec reviewer → code quality reviewer) for each task sequentially → writes `shipyard-results.json` → `shipyard publish-execution` pushes the branch and opens a PR.
 
-**Documentation (CI, update-docs job):** When the last PR in an epic is merged and there is no more work, `shipyard update-docs` runs a documentation agent over the cumulative epic diff, commits the result, then iterates with a verifier sub-agent until it outputs LGTM, and pushes to the epic branch.
+**Documentation (CI, update-docs job):** When the last PR in an epic is merged and there is no more work, `shipyard update-docs` runs a documentation agent over the cumulative epic diff, commits after the first pass, then iterates with a verifier sub-agent until it outputs LGTM. The surrounding workflow step pushes to the epic branch.
 
 ## Codemap
 
