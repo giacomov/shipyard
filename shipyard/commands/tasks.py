@@ -260,7 +260,7 @@ async def _run_task_agent(prompt: str, cwd: str, task_list: SubtaskList) -> None
     "output_file",
     type=click.Path(),
     default=None,
-    help="Output JSON file (default: stdout)",
+    help=f"Output JSON file (default: {settings.tasks_output_file})",
 )
 @click.option(
     "-t",

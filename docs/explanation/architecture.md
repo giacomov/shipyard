@@ -4,7 +4,7 @@ Shipyard solves the coordination problem in agentic coding: given a multi-task i
 
 ## Bird's-eye view
 
-**Plan authoring (local):** A developer writes a markdown plan → `shipyard tasks` parses it into a dependency graph (tasks.json) → `shipyard sync` materializes it as GitHub Issues with `blocked-by` edges and an epic branch.
+**Plan authoring (local):** A developer writes a markdown plan → `shipyard tasks` runs an AI agent to extract tasks into a dependency graph (tasks.json) → `shipyard sync` materializes it as GitHub Issues with `blocked-by` edges and an epic branch.
 
 **Work resolution (CI, find-work job):** GitHub event context → `shipyard find-work` resolves the active epic and filters sub-issues to those with no open blockers → writes a JSON payload to `$GITHUB_OUTPUT`.
 
