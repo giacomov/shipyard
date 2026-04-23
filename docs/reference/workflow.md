@@ -161,7 +161,7 @@ Steps:
 3. **Extract GitHub event context** — `shipyard extract-github-event` parses the trigger event and writes structured outputs (`issue_number`, `issue_title`, `has_review`, `pr_number`, `review_target`, etc.).
 4. Configure git identity (`github-actions[bot]`).
 5. **Checkout branch** — checks out `plan/i<N>` for plan events, or the implementation branch (`branch_name` output) when `review_target == 'implementation'`.
-6. **Generate or update plan** (skipped when `review_target == 'implementation'`) — `shipyard plan` runs the planning agent and writes `plans/i<N>.md`. On re-plan, also passes `--existing-plan-path` and `--review-feedback-file`.
+6. **Generate or update plan** (skipped when `review_target == 'implementation'`) — `shipyard plan` runs the planning agent and writes `plans/i<N>.md`. On re-plan, also passes `--pr-number`, `--existing-plan-path`, and `--review-feedback-file`.
 7. **Address review feedback** (only when `review_target == 'implementation'`) — `shipyard execute --review-feedback-file review-feedback.txt --prompt-file prompt.txt` runs the implementer agent against the review feedback.
 8. **Commit and publish plan** (skipped when `review_target == 'implementation'`) — commits the plan file and either pushes a new branch + opens a PR (initial plan) or pushes to the existing branch (re-plan).
 9. **Push revision and notify** (only when `review_target == 'implementation'`) — pushes the implementation branch and posts a PR comment notifying the reviewer.
@@ -200,7 +200,7 @@ permissions: contents: read, issues: write, id-token: write
 ```
 
 Steps:
-1. `actions/checkout@v4` — checks out the base branch (main) so the merged plan file is available.
+1. `actions/checkout@v4` with `ref: github.event.pull_request.base.ref` — checks out the PR base branch so the merged plan file is available.
 2. Set up uv and install shipyard.
 3. **Extract issue number** — parses the branch name (`plan/i<N>`) to get `N`.
 4. **Generate `tasks.json`** — `shipyard tasks -i plans/i<N>.md --title "Implementation: <ISSUE_TITLE>" -o tasks.json` runs the task-parsing agent to convert the plan into structured JSON.
