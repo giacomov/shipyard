@@ -162,18 +162,21 @@ permissions: contents: write, pull-requests: write, issues: write, id-token: wri
 Steps:
 1. `actions/checkout@v4` with `fetch-depth: 0`.
 2. Set up uv and install shipyard.
-3. **Extract GitHub event context** — `shipyard extract-github-event` parses the trigger event and writes structured outputs (`issue_number`, `issue_title`, `has_review`, `pr_number`, etc.).
+3. **Extract GitHub event context** — `shipyard extract-github-event` parses the trigger event and writes structured outputs (`issue_number`, `issue_title`, `has_review`, `pr_number`, `review_target`, etc.).
 4. Configure git identity (`github-actions[bot]`).
-5. **Checkout plan branch** — creates `plan/i<N>` for new plans, or fetches and checks out the existing branch for re-plans.
-6. **Generate or update plan** — `shipyard plan` runs the planning agent and writes `plans/i<N>.md`. On re-plan, also passes `--existing-plan-path` and `--review-feedback-file`.
-7. **Commit and publish plan** — commits the plan file and either pushes a new branch + opens a draft PR (initial plan) or force-pushes to the existing branch (re-plan).
+5. **Checkout branch** — checks out `plan/i<N>` for plan events, or the implementation branch (`branch_name` output) when `review_target == 'implementation'`.
+6. **Generate or update plan** (skipped when `review_target == 'implementation'`) — `shipyard plan` runs the planning agent and writes `plans/i<N>.md`. On re-plan, also passes `--existing-plan-path` and `--review-feedback-file`.
+7. **Address review feedback** (only when `review_target == 'implementation'`) — `shipyard execute --review-feedback-file review-feedback.txt --prompt-file prompt.txt` runs the implementer agent against the review feedback.
+8. **Commit and publish plan** (skipped when `review_target == 'implementation'`) — commits the plan file and either pushes a new branch + opens a PR (initial plan) or pushes to the existing branch (re-plan).
+9. **Push revision and notify** (only when `review_target == 'implementation'`) — pushes the implementation branch and posts a PR comment notifying the reviewer.
 
-### Plan vs. re-plan
+### Plan vs. re-plan vs. implementation revision
 
-| Mode | Trigger | Branch | PR |
-|------|---------|--------|----|
-| Initial plan | Issue labeled `plan` | Created: `plan/i<N>` | Draft PR opened |
-| Re-plan | Review `CHANGES_REQUESTED` on plan PR | Existing `plan/i<N>` checked out | Existing PR updated |
+| Mode | Trigger | Branch | Output |
+|------|---------|--------|--------|
+| Initial plan | Issue labeled `plan` | Created: `plan/i<N>` | PR opened, issue commented with PR URL |
+| Re-plan | Review `CHANGES_REQUESTED` on plan PR | Existing `plan/i<N>` checked out | Branch pushed, existing PR updated |
+| Implementation revision | Review `CHANGES_REQUESTED` on implementation PR | Existing implementation branch checked out | Branch pushed, PR comment posted |
 
 ---
 

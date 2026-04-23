@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Added `update-docs` job to `epic-driver.yml`: triggers when the last PR in an epic is merged and no remaining work exists, then runs `shipyard update-docs` and pushes documentation changes.
 - Added `doc_agent.md` and `doc-verifier.md` prompts for the documentation agent and its verifier sub-agent.
 - Added `SHIPYARD_DOC_MODEL`, `SHIPYARD_DOC_EFFORT`, `SHIPYARD_DOC_REVIEW_MODEL`, and `SHIPYARD_DOC_REVIEW_EFFORT` settings to control the documentation agent's model and effort level.
-- Added `plan-driver.yml` workflow: triggers on `plan` label or `CHANGES_REQUESTED` review, runs a planning agent to produce or revise `plans/i<N>.md`, and opens a draft PR.
+- Added `plan-driver.yml` workflow: triggers on `plan` label or `CHANGES_REQUESTED` review; runs a planning agent to produce or revise `plans/i<N>.md`, or runs `shipyard execute` to address implementation review feedback.
 - Added `sync-driver.yml` workflow: triggers on merged plan PRs, converts the plan file into GitHub Issues automatically.
 - `shipyard init` now installs all three workflows (`epic-driver.yml`, `plan-driver.yml`, `sync-driver.yml`) by default; use `--skip-plan-driver` to install only `epic-driver.yml`.
 - `shipyard sync` now creates and pushes the `shipyard/epic-<N>` branch at the end of the sync run.
