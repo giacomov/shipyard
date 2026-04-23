@@ -104,7 +104,7 @@ Steps:
 
 ### How data flows between jobs
 
-The two jobs communicate via GitHub Actions step outputs:
+All three jobs communicate via GitHub Actions step outputs. Both `execute` and `update-docs` consume the outputs written by `find-work`:
 
 ```yaml
 # find-work job writes:
