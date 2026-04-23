@@ -1,6 +1,6 @@
 # CLI reference
 
-Shipyard exposes eight commands through the `shipyard` entry point.
+Shipyard exposes nine commands through the `shipyard` entry point.
 
 ```
 shipyard --help
@@ -276,3 +276,33 @@ Parse a GitHub Actions event and write structured outputs for use in subsequent 
 **Side effects:** Writes `prompt.txt` containing the issue/task context for `shipyard plan`. On review events, also writes `review-feedback.txt` combining the review summary and inline comments.
 
 **Not intended for direct use outside CI.**
+
+---
+
+## `shipyard update-docs` (CI only)
+
+Update documentation to reflect all changes made across an epic.
+
+**Purpose:** Runs a documentation agent over the cumulative diff since `BASE_SHA`, commits the result, then iterates with a `doc_verifier` sub-agent until the verifier outputs LGTM. Called by the `update-docs` job in `epic-driver.yml` after an epic is fully implemented.
+
+**Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--base-sha TEXT` | Git SHA of the point where the epic branch diverged from main (required) |
+
+**Configuration:** The `CLAUDE_CODE_OAUTH_TOKEN` environment variable must be set. Agent model and effort are controlled by the `SHIPYARD_DOC_MODEL`, `SHIPYARD_DOC_EFFORT`, `SHIPYARD_DOC_REVIEW_MODEL`, and `SHIPYARD_DOC_REVIEW_EFFORT` environment variables (see `shipyard/settings.py` for defaults).
+
+**Outputs:**
+
+- Commits documentation changes directly to the current branch.
+- Does not push — the surrounding workflow step handles the push.
+
+**Example:**
+
+```bash
+# Invoked by the workflow as:
+shipyard update-docs --base-sha "$BASE_SHA"
+```
+
+**Not intended for direct use outside CI.** See [workflow.md](workflow.md) for how the surrounding workflow step computes `BASE_SHA`.

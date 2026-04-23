@@ -10,6 +10,8 @@ Shipyard solves the coordination problem in agentic coding: given a multi-task i
 
 **Implementation (CI, execute job):** Work JSON → `shipyard execute` runs a three-agent pipeline (implementer → spec reviewer → code quality reviewer) for each task sequentially → writes `shipyard-results.json` → `shipyard publish-execution` pushes the branch and opens a PR.
 
+**Documentation (CI, update-docs job):** When the last PR in an epic is merged and there is no more work, `shipyard update-docs` runs a documentation agent over the cumulative epic diff, commits the result, then iterates with a verifier sub-agent until it outputs LGTM, and pushes to the epic branch.
+
 ## Codemap
 
 ```
@@ -24,6 +26,7 @@ shipyard/
     execute.py         # shipyard execute — async three-agent pipeline; writes shipyard-results.json
     plan.py            # shipyard plan — planning agent runner; writes plans/i<N>.md
     publish.py         # shipyard publish-execution — git push + gh pr create; reads shipyard-results.json
+    update_docs.py     # shipyard update-docs — doc agent + verifier loop; CI use only
   data/
     prompts/           # plain-text prompt templates with {PLACEHOLDER} tokens; loaded via importlib.resources
     templates/         # epic-driver.yml, plan-driver.yml, sync-driver.yml with SHIPYARD_VERSION placeholder
@@ -45,7 +48,7 @@ Key types: `SubtaskList` (the shared schema between `shipyard tasks` output and 
 
 **All GitHub API calls go through the `gh` CLI as subprocesses.** No code in this repo makes direct HTTP calls to api.github.com. The `gh` subprocess boundary is deliberate: it means local auth, org SSO, and API preview flags are handled by `gh`, not by this codebase.
 
-**CI-only commands take no interactive options.** `find_work.py`, `execute.py`, `plan.py`, and `publish.py` read all configuration from environment variables. They have no `--repo`, `--token`, or similar flags. This is what makes them safe to run in an unattended CI job.
+**CI-only commands are not intended for direct use.** `find_work.py`, `execute.py`, `plan.py`, and `publish.py` read all configuration from environment variables; they carry no `--repo`, `--token`, or similar flags. `update_docs.py` takes `--base-sha` as a CLI flag whose value is injected by the workflow from an environment variable. None of these commands are designed for interactive use outside CI.
 
 **`shipyard execute` never pushes or opens a PR.** Branch push and PR creation are `shipyard publish-execution`'s responsibility. This separation allows `publish-execution` to run with `if: always()` in the workflow, ensuring partial results are always published even when the pipeline exits non-zero.
 
@@ -59,7 +62,7 @@ Key types: `SubtaskList` (the shared schema between `shipyard tasks` output and 
 
 **Error handling:** In the pipeline, any exception during a task's agent run triggers `reset_fn(base_sha)` (default: `git reset --hard`) and `comment_fn(issue_id, reason)` (default: posts a GitHub Issue comment with an HTML tag `<!-- shipyard-executor: REASON -->`). Execution continues to the next task. `shipyard execute` exits 1 if any task failed.
 
-**Configuration:** Local commands (`init`, `tasks`, `sync`) use CLI flags. CI commands (`find-work`, `execute`, `plan`, `publish-execution`) use environment variables exclusively — `GITHUB_REPOSITORY`, `EVENT_NAME`, `ISSUE_NUMBER`, `CLAUDE_CODE_OAUTH_TOKEN`, etc.
+**Configuration:** Local commands (`init`, `tasks`, `sync`) use CLI flags. CI commands (`find-work`, `execute`, `plan`, `publish-execution`) use environment variables exclusively — `GITHUB_REPOSITORY`, `EVENT_NAME`, `ISSUE_NUMBER`, `CLAUDE_CODE_OAUTH_TOKEN`, etc. `update-docs` is also CI-only; it reads model/effort settings from environment variables and accepts `--base-sha` as a CLI flag injected by the workflow.
 
 **Authentication:** The `gh` CLI handles all GitHub authentication (personal access token or OIDC). The `CLAUDE_CODE_OAUTH_TOKEN` environment variable authenticates calls to the Claude Code API and is unrelated to GitHub auth.
 

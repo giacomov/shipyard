@@ -83,6 +83,25 @@ Steps:
 7. **Run agent pipeline** — `shipyard execute -i work.json` runs the three-agent pipeline for each unblocked issue and writes `shipyard-results.json`.
 8. **Push branch and open PR** (`if: always()`) — `shipyard publish-execution --branch "$SHIPYARD_BRANCH" --base-branch "$SHIPYARD_EPIC_BRANCH" -i work.json` pushes the branch and opens a PR against the epic branch if any issues succeeded. Runs even if `shipyard execute` exits non-zero, so partial results are always published.
 
+#### Job 3: `update-docs`
+
+```
+runs-on: ubuntu-latest
+needs: find-work
+if: has_work == 'false' && pull_request.merged == true
+permissions: contents: write, id-token: write
+```
+
+Runs when a PR merges into the epic branch and there is no remaining work (`has_work == 'false'`). This signals that the epic is complete.
+
+Steps:
+1. `actions/checkout@v4` with `fetch-depth: 0`.
+2. Configure git identity (`github-actions[bot]`).
+3. Set up uv and install shipyard.
+4. **Check out epic branch and compute base SHA** — fetches the epic branch, checks it out, and computes `BASE_SHA` as the merge-base between the epic branch and the main branch. This SHA covers the full cumulative diff of the epic.
+5. **Run documentation agent** — `shipyard update-docs --base-sha "$BASE_SHA"` runs the doc agent over the cumulative diff, commits changes, then iterates with the `doc_verifier` sub-agent until it outputs LGTM.
+6. **Push documentation changes** — pushes the updated epic branch to origin.
+
 ### How data flows between jobs
 
 The two jobs communicate via GitHub Actions step outputs:
