@@ -50,33 +50,33 @@ After running, add `CLAUDE_CODE_OAUTH_TOKEN` as a secret in the target repositor
 
 ## `shipyard tasks`
 
-Parse a markdown plan into task JSON.
+Extract tasks from a markdown plan using an AI agent.
 
-**Purpose:** Reads a plan written in the shipyard markdown format, validates dependencies, and emits a `tasks.json` file (or JSON to stdout) suitable for `shipyard sync`.
+**Purpose:** Runs a `ClaudeSDKClient` AI agent that reads the markdown plan and calls structured tools (`create_task`, `delete_task`, `link_tasks`, etc.) to populate a `SubtaskList`. Writes the result to `tasks.json` (or to `--output` if specified), suitable for `shipyard sync`.
 
 **Flags:**
 
 | Flag | Description |
 |------|-------------|
 | `-i`, `--input FILE` | Input markdown file (required) |
-| `-t`, `--title TEXT` | Plan title (required) |
-| `-o`, `--output FILE` | Output JSON file (default: stdout) |
+| `-t`, `--title TEXT` | Epic issue title written into `tasks.json` (required) |
+| `-o`, `--output FILE` | Output JSON file (default: `tasks.json`) |
 
-**Inputs:** A markdown plan file. See [task-format.md](task-format.md) for the exact syntax.
+**Inputs:** A markdown plan file. See [task-format.md](task-format.md) for the expected structure.
 
-**Outputs:** A JSON object with `title`, `description`, and `tasks[]`. See [task-format.md](task-format.md) for the schema.
+**Outputs:** A JSON object with `title`, `description`, and `tasks` (a dict keyed by task ID). See [task-format.md](task-format.md) for the schema.
 
 **Example:**
 
 ```bash
-# Parse to file
-shipyard tasks -i plan.md -t "My Feature Plan" -o tasks.json
+# Extract to default tasks.json
+shipyard tasks -i plan.md -t "My Feature Plan"
 
-# Parse and inspect on stdout
-shipyard tasks -i plan.md -t "My Feature Plan" | jq '.tasks | length'
+# Extract to a named file
+shipyard tasks -i plan.md -t "My Feature Plan" -o tasks.json
 ```
 
-Exits non-zero if dependency references are invalid (e.g., a task depends on a non-existent task ID).
+Exits non-zero if the agent subprocess fails.
 
 ---
 
