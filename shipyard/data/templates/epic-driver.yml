@@ -100,3 +100,50 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: shipyard publish-execution --branch "$SHIPYARD_BRANCH" --base-branch "$SHIPYARD_EPIC_BRANCH" -i work.json
+
+  update-docs:
+    name: Update documentation
+    needs: find-work
+    if: |
+      needs.find-work.outputs.has_work == 'false' &&
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+
+      - uses: astral-sh/setup-uv@v4
+
+      - name: Install shipyard
+        run: uv tool install "git+https://github.com/giacomov/shipyard@SHIPYARD_VERSION"
+
+      - name: Check out epic branch and compute base SHA
+        run: |
+          EPIC_BRANCH="${{ github.event.pull_request.head.ref }}"
+          git fetch origin "$EPIC_BRANCH"
+          git checkout "$EPIC_BRANCH"
+          BASE_SHA=$(git merge-base "origin/${{ github.event.pull_request.base.ref }}" HEAD)
+          echo "BASE_SHA=$BASE_SHA" >> "$GITHUB_ENV"
+          echo "EPIC_BRANCH=$EPIC_BRANCH" >> "$GITHUB_ENV"
+
+      - name: Run documentation agent
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: shipyard update-docs --base-sha "$BASE_SHA"
+
+      - name: Push documentation changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: git push origin "$EPIC_BRANCH"
