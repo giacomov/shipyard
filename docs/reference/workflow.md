@@ -88,7 +88,7 @@ Steps:
 ```
 runs-on: ubuntu-latest
 needs: find-work
-if: has_work == 'false' && event_name == 'pull_request' && pull_request.merged == true
+if: needs.find-work.outputs.has_work == 'false' && github.event_name == 'pull_request' && github.event.pull_request.merged == true
 permissions: contents: write, id-token: write
 ```
 
@@ -98,7 +98,7 @@ Steps:
 1. `actions/checkout@v4` with `fetch-depth: 0`.
 2. Configure git identity (`github-actions[bot]`).
 3. Set up uv and install shipyard.
-4. **Check out epic branch and compute base SHA** — fetches the epic branch, checks it out, and computes `BASE_SHA` as the merge-base between the epic branch and the PR's base branch (`github.event.pull_request.base.ref`). This SHA covers the full cumulative diff of the epic.
+4. **Check out epic branch and compute base SHA** — derives the epic branch name from `github.event.pull_request.head.ref`, fetches and checks it out, then computes `BASE_SHA` as `git merge-base origin/<base.ref> HEAD` (where `<base.ref>` is `github.event.pull_request.base.ref`). This SHA covers the full cumulative diff of the epic.
 5. **Run documentation agent** — `shipyard update-docs --base-sha "$BASE_SHA"` runs the doc agent over the cumulative diff, commits changes, then iterates with the `doc_verifier` sub-agent until it outputs LGTM.
 6. **Push documentation changes** — pushes the updated epic branch to origin.
 

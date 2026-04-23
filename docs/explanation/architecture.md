@@ -20,7 +20,7 @@ shipyard/
   settings.py          # ShipyardSettings: pr_base_branch and other defaults
   commands/
     init.py            # shipyard init — copies workflow templates, substitutes SHIPYARD_VERSION
-    tasks.py           # shipyard tasks — markdown → ParsedPlan → tasks.json; pure, no I/O side effects
+    tasks.py           # shipyard tasks — runs an AI agent to extract tasks from a markdown plan; writes tasks.json
     sync.py            # shipyard sync — tasks.json → GitHub Issues + epic branch via gh CLI
     find_work.py       # shipyard find-work — epic resolution + unblocked sub-issue lookup; writes $GITHUB_OUTPUT
     execute.py         # shipyard execute — async three-agent pipeline; writes shipyard-results.json
