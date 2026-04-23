@@ -85,10 +85,6 @@ Steps:
 
 #### Job 3: `update-docs`
 
-> **Note:** This job exists in the shipyard repository's own deployed workflow but is not yet included in the template that `shipyard init` installs. Users running `shipyard init` will not get this job.
-
-<!-- NEEDS HUMAN INPUT: Should the update-docs job be added to shipyard/data/templates/epic-driver.yml so that shipyard init installs it? -->
-
 ```
 runs-on: ubuntu-latest
 needs: find-work
