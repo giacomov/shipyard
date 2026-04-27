@@ -33,6 +33,7 @@ include = ["shipyard*"]
 shipyard = ["py.typed"]
 "shipyard.data.prompts" = ["*.md"]
 "shipyard.data.templates" = ["*.yml"]
+"shipyard.data.skills" = ["*/SKILL.md"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

@@ -10,44 +10,6 @@ from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
 from shipyard.settings import settings
 from shipyard.utils.agent import receive_from_client
 
-_INITIAL_PROMPT = """\
-Read the issue context and the codebase, then write an implementation plan in Markdown.
-
-Each task in the plan will become its own PR, so group work to keep the number of tasks
-small without sacrificing the focus and cohesiveness of each PR.
-
-Write the plan to: {plan_path}
-Start the file with the line `<!-- Related to: #{issue_number} -->` followed by a blank line.
-
-## Issue context
-
-{context}
-"""
-
-_REPLAN_PROMPT = """\
-A previous version of this plan was reviewed and changes were requested.
-Read the issue context, the existing plan, and the review feedback, then revise the plan
-to address the feedback. Write the updated plan in Markdown.
-
-Each task in the plan will become its own PR, so group work to keep the number of tasks
-small without sacrificing the focus and cohesiveness of each PR.
-
-Write the plan to: {plan_path}
-Start the file with the line `<!-- Related to: #{issue_number} -->` followed by a blank line.
-
-## Issue context
-
-{context}
-
-## Existing plan
-
-{existing_plan}
-
-## Review feedback (incorporate this)
-
-{review_feedback}
-"""
-
 _RETRY_PROMPT = "You forgot to write the plan to {plan_path}. Please write it now."
 
 
@@ -146,8 +108,11 @@ def plan(
     plan_path = f"{settings.plans_dir}/i{issue_number}.md"
 
     if pr_number is None:
-        agent_prompt = _INITIAL_PROMPT.format(
-            context=context, plan_path=plan_path, issue_number=issue_number
+        agent_prompt = (
+            f"Use the shipyard-planner skill.\n\n"
+            f"## Issue context\n\n{context}\n\n"
+            f"Write the plan to: {plan_path}\n"
+            f"Start the file with `<!-- Related to: #{issue_number} -->` followed by a blank line."
         )
         original_content = None
     else:
@@ -161,12 +126,13 @@ def plan(
             with open(review_feedback_file) as f:
                 review_feedback = f.read()
 
-        agent_prompt = _REPLAN_PROMPT.format(
-            context=context,
-            plan_path=plan_path,
-            issue_number=issue_number,
-            existing_plan=existing_plan,
-            review_feedback=review_feedback,
+        agent_prompt = (
+            f"Use the shipyard-replanner skill.\n\n"
+            f"## Issue context\n\n{context}\n\n"
+            f"## Existing plan\n\n{existing_plan}\n\n"
+            f"## Review feedback (incorporate this)\n\n{review_feedback}\n\n"
+            f"Write the updated plan to: {plan_path}\n"
+            f"Start the file with `<!-- Related to: #{issue_number} -->` followed by a blank line."
         )
         original_content = existing_plan if existing_plan_path else None
 

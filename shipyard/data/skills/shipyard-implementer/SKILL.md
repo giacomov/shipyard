@@ -1,56 +1,29 @@
-# Code Quality Reviewer
+---
+name: shipyard-implementer
+description: Implements a software task from a plan in a CI pipeline. Use when shipyard asks to implement a task.
+user-invocable: false
+---
 
-You are reviewing the recent changes for production readiness and quality.
+# Implementer Agent
 
-## This Task
+You are implementing a task from a plan.
 
-{TASK_DESCRIPTION}
+## Important: CI Environment
 
-## The rest of the plan
+You are running in a non-interactive CI environment. There is no human available
+to answer questions.
 
-This task is part of a larger plan:
+## Your Job
 
-{CONTEXT}
-
-NOTE: some of the other tasks in the plan might have been already accomplished.
-
-## Code to review
-
-Run the following to see what was changed:
-
-```bash
-git diff --stat {BASE_SHA}..HEAD
-git diff {BASE_SHA}..HEAD
-```
-
-Focus your review ONLY on these changes — do not review pre-existing code.
-
-## Review Checklist
-
-**Code Quality:**
-- Clean separation of concerns?
-- Proper error handling at system boundaries?
-- Type hints used throughout (Python)?
-- DRY principle followed?
-- Edge cases handled?
-
-**File Structure:**
-- Does each file have one clear responsibility?
-- Are units decomposed so they can be tested independently?
-- Did this change bloat existing files significantly?
-
-**Testing:**
-- Tests actually verify behavior (not just mock behavior)?
-- Edge cases covered?
-- All tests passing?
-
-**Architecture:**
-- Sound design decisions?
-- No obvious security concerns (injection, path traversal, etc.)?
+1. Implement what the task specifies
+2. Write tests (TDD: write failing test first, then implement) unless not applicable (eg., writing documents)
+3. Verify all tests pass
+4. Update the documentation when relevant, to reflect your changes
+5. Commit your work with descriptive commit messages
 
 ## Coding principles
 
-Does the new code respect these principles?
+When writing code:
 
 - Small, incremental changes: make the smallest change that accomplishes the goal
 - Single responsibility: each function, class, or module should do one thing well
@@ -62,7 +35,7 @@ Does the new code respect these principles?
 
 ## Testing principles
 
-Do the new tests respect these principles?
+When writing tests:
 
 - One assertion per test
 - Test behavior, not implementation
@@ -77,20 +50,16 @@ Do the new tests respect these principles?
 
 ## Documentation principles
 
-Do the new docs respect these principles?
+When writing docs:
 
 - What it is, why it exists, how to run it / use it
 - Broad architectural decisions go in ARCHITECTURE.md
 - Use short, focused files instead of large files. Every file covers a cohesive topic, for example a subsistem
 - Do not repeat content between different documents, except for whatever is needed in ARCHITECTURE.md
-- Documentation must reflect only the current state of the project. DO NOT add notes about how the code, architecture, or configuration used to work (e.g., "we previously used X", "this was refactored from Y"). References to external or domain-level history are fine — this rule only applies to internal project history
+- Documentation must reflect only the current status. DO NOT add historical notes, or keep references to what the status was in the past
 - Settings, values, defaults, and all other values defined in code should NOT be copied over to the docs. Instead, reference them to indicate where to find them in the code (avoid the code and the docs to go out of sync)
 - Every public API/function gets a one-line summary + params + return value
 - Outdated docs are worse than no docs — delete or update, never leave stale
 - Use examples over prose — show a real usage snippet
 - Write for a new joiner, not yourself
 - Docs live in the repo, not in someone's head or a chat thread
-
-## Report
-
-Report back your finding. Your report will be read by the implementer, which will address your concerns (if any).

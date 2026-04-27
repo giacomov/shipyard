@@ -75,39 +75,21 @@ async def _run_issue_pipeline_inner(
         for t in work.tasks.values()
     ]
 
-    task_description = f"Task {task.task_id}: {task.title}\n\n{task.description}"
-    context = f"Epic: {work.title}\n\n" + "\n".join(tasks_context)
-
-    implementer_prompt = (
-        _res_files("shipyard.data.prompts")
-        .joinpath("implementer.md")
-        .read_text()
-        .format(
-            TASK_DESCRIPTION=task_description,
-            CONTEXT=context,
-        )
+    task_context = (
+        f"## This Task\n\n"
+        f"Task {task.task_id}: {task.title}\n\n{task.description}\n\n"
+        f"## The rest of the plan\n\n"
+        f"This task is part of a larger plan:\n\n"
+        + "\n".join(tasks_context)
+        + "\n\nNOTE: some of the other tasks in the plan might have been already accomplished."
     )
 
-    spec_reviewer_prompt = (
-        _res_files("shipyard.data.prompts")
-        .joinpath("spec-reviewer.md")
-        .read_text()
-        .format(
-            TASK_DESCRIPTION=task_description,
-            CONTEXT=context,
-            BASE_SHA=base_sha,
-        )
-    )
-
-    code_quality_prompt = (
-        _res_files("shipyard.data.prompts")
-        .joinpath("code-quality-reviewer.md")
-        .read_text()
-        .format(
-            TASK_DESCRIPTION=task_description,
-            CONTEXT=context,
-            BASE_SHA=base_sha,
-        )
+    review_context = (
+        f"{task_context}\n\n"
+        f"## Code to review\n\n"
+        f"Run the following to see what was changed:\n\n"
+        f"```bash\ngit diff --stat {base_sha}..HEAD\ngit diff {base_sha}..HEAD\n```\n\n"
+        f"Focus your review ONLY on these changes — do not review pre-existing code."
     )
 
     options = ClaudeAgentOptions(
@@ -120,14 +102,14 @@ async def _run_issue_pipeline_inner(
         agents={
             "spec_reviewer": AgentDefinition(
                 description="Expert spec reviewer specialist. Verifies against the spec and provide feedback.",
-                prompt=spec_reviewer_prompt,
+                prompt="Use the shipyard-spec-reviewer skill.",
                 tools=["Bash", "Read", "Grep", "Glob"],
                 model=settings.review_model,
                 effort=settings.review_effort,
             ),
             "code_quality_reviewer": AgentDefinition(
                 description="Expert code quality reviewer specialist. Reviews the code for quality and provide feedback.",
-                prompt=code_quality_prompt,
+                prompt="Use the shipyard-code-quality-reviewer skill.",
                 tools=["Bash", "Read", "Grep", "Glob"],
                 model=settings.review_model,
                 effort=settings.review_effort,
@@ -137,7 +119,7 @@ async def _run_issue_pipeline_inner(
 
     async with ClaudeSDKClient(options=options) as client:
         # Implement
-        await client.query(implementer_prompt)
+        await client.query(f"Use the shipyard-implementer skill.\n\n{task_context}")
 
         await receive_from_client(client)
 
@@ -149,30 +131,27 @@ async def _run_issue_pipeline_inner(
 
         # Review spec
         await client.query(
-            """
-            Now run the spec reviewer agent to review the implementation. If the implementation does not meet the spec, 
-            fix the issues and re-run the spec reviewer until the implementation meets the spec.
-            """
+            f"Now run the spec reviewer agent to review the implementation. "
+            f"Pass it this context:\n\n{review_context}\n\n"
+            f"If the implementation does not meet the spec, fix the issues and re-run the spec reviewer "
+            f"until the implementation meets the spec."
         )
 
         await receive_from_client(client)
 
         # Review code quality
         await client.query(
-            """
-            Now run the code quality reviewer agent to review the implementation. If the implementation does not meet the 
-            code quality bar, fix the issues and re-run the code quality reviewer until the implementation meets the code 
-            quality bar.
-            """
+            f"Now run the code quality reviewer agent to review the implementation. "
+            f"Pass it this context:\n\n{review_context}\n\n"
+            f"If the implementation does not meet the code quality bar, fix the issues and re-run the "
+            f"code quality reviewer until the implementation meets the code quality bar."
         )
 
         await receive_from_client(client)
 
         # Run the tests
         await client.query(
-            """
-            If you changed any testable code, make sure there are tests for it, and run the tests until they pass.
-            """
+            "If you changed any testable code, make sure there are tests for it, and run the tests until they pass."
         )
 
         await receive_from_client(client)

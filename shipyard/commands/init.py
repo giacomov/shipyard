@@ -1,12 +1,51 @@
 """shipyard init — set up the Shipyard workflow in a repository."""
 
 import importlib.metadata
+import subprocess
 from importlib.resources import files as _res_files
 from pathlib import Path
 
 import click
 
 _TEMPLATES = _res_files("shipyard.data.templates")
+_SKILLS = _res_files("shipyard.data.skills")
+
+_SKILL_NAMES = [
+    "shipyard-system-prompt",
+    "shipyard-implementer",
+    "shipyard-spec-reviewer",
+    "shipyard-code-quality-reviewer",
+    "shipyard-doc-agent",
+    "shipyard-doc-verifier",
+    "shipyard-planner",
+    "shipyard-replanner",
+]
+
+
+def _repo_root(path: str) -> Path:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=path,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return Path(result.stdout.strip())
+    except subprocess.CalledProcessError:
+        return Path(path)
+
+
+def _install_skills(repo_root: Path, force: bool) -> None:
+    for name in _SKILL_NAMES:
+        dest_dir = repo_root / ".agents" / "skills" / name
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest = dest_dir / "SKILL.md"
+        if dest.exists() and not force:
+            click.echo(f"  Skipping {dest} (already exists, use --force to overwrite)")
+            continue
+        dest.write_text(_SKILLS.joinpath(name).joinpath("SKILL.md").read_text())
+        click.echo(f"  Created {dest}")
 
 
 @click.command()
@@ -75,6 +114,10 @@ def init(path: str, force: bool, skip_plan_driver: bool, from_main: bool) -> Non
         sync_dest.write_text(sync_content)
         click.echo(f"Created {sync_dest}")
 
+    click.echo("\nInstalling agent skills...")
+    _install_skills(_repo_root(path), force)
+    click.echo("  Tip: edit .agents/skills/shipyard-*/SKILL.md to customize agent behavior.")
+
     click.echo(
-        "Next step: add CLAUDE_CODE_OAUTH_TOKEN as a secret in your GitHub repository settings."
+        "\nNext step: add CLAUDE_CODE_OAUTH_TOKEN as a secret in your GitHub repository settings."
     )
