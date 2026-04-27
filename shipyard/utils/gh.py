@@ -5,33 +5,75 @@ import os
 import re
 import subprocess
 
+import click
+
 from shipyard.settings import settings
+from shipyard.sim import is_sim_mode
+
+_MUTATING_GH_VERBS: set[tuple[str, str]] = {
+    ("issue", "create"),
+    ("issue", "comment"),
+    ("issue", "edit"),
+    ("pr", "create"),
+    ("label", "create"),
+    ("label", "edit"),
+}
+
+_MUTATING_API_METHODS = {"POST", "PATCH", "DELETE", "PUT"}
 
 
-def gh(args: list[str], dry_run: bool = False, dry_label: str = "") -> str:
+def _sim_intercept(args: list[str]) -> str | None:
+    """Return mock output if this gh call should be intercepted in sim mode, else None."""
+    if len(args) >= 2 and tuple(args[:2]) in _MUTATING_GH_VERBS:
+        click.echo(f"[sim] gh {' '.join(args)}")
+        if args[0] == "issue" and args[1] == "create":
+            repo = args[args.index("--repo") + 1] if "--repo" in args else "owner/repo"
+            return f"https://github.com/{repo}/issues/999"
+        if args[0] == "pr" and args[1] == "create":
+            repo = args[args.index("--repo") + 1] if "--repo" in args else "owner/repo"
+            return f"https://github.com/{repo}/pull/999"
+        return ""
+
+    if args and args[0] == "api":
+        if "--method" in args:
+            idx = args.index("--method")
+            if idx + 1 < len(args) and args[idx + 1].upper() in _MUTATING_API_METHODS:
+                click.echo(f"[sim] gh {' '.join(args)}")
+                return "{}"
+        # Mock database_id fetch used by create_issue after a simulated issue create.
+        # Detected by the "-q .id" jq filter pattern (specific to that call site).
+        if "-q" in args:
+            q_idx = args.index("-q")
+            if q_idx + 1 < len(args) and args[q_idx + 1] == ".id":
+                click.echo(f"[sim] gh {' '.join(args)}")
+                return "999"
+
+    return None
+
+
+def gh(args: list[str]) -> str:
     """Run a gh CLI command and return trimmed stdout.
 
-    Raises RuntimeError on non-zero exit. In dry_run mode, prints the command and returns "".
+    Raises RuntimeError on non-zero exit. In sim mode, write operations are
+    intercepted and print [sim] lines instead of executing.
     """
-    if dry_run:
-        label = f"  # {dry_label}" if dry_label else ""
-        print(f"  [dry-run] gh {' '.join(args)}{label}")
-        return ""
-    result = subprocess.run(["gh"] + args, capture_output=True, text=True)
-    if result.returncode != 0:
+    if is_sim_mode():
+        result = _sim_intercept(args)
+        if result is not None:
+            return result
+    proc = subprocess.run(["gh"] + args, capture_output=True, text=True)
+    if proc.returncode != 0:
         raise RuntimeError(
-            f"gh command failed (exit {result.returncode}): gh {' '.join(args)}\n{result.stderr}"
+            f"gh command failed (exit {proc.returncode}): gh {' '.join(args)}\n{proc.stderr}"
         )
-    return result.stdout.strip()
+    return proc.stdout.strip()
 
 
-def resolve_repo(repo_flag: str | None = None, dry_run: bool = False) -> str:
+def resolve_repo(repo_flag: str | None = None) -> str:
     """Return 'owner/repo'. Uses gh repo view if repo_flag is None."""
     if repo_flag:
         return repo_flag
-    result = gh(
-        ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"], dry_run=dry_run
-    )
+    result = gh(["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"])
     if not result:
         return "<owner>/<repo>"
     return result

@@ -5,10 +5,10 @@ import asyncio
 import os
 
 import click
-from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
+from claude_agent_sdk import ClaudeAgentOptions
 
 from shipyard.settings import settings
-from shipyard.utils.agent import receive_from_client
+from shipyard.utils.agent import get_sdk_client, receive_from_client
 
 _RETRY_PROMPT = "You forgot to write the plan to {plan_path}. Please write it now."
 
@@ -33,7 +33,7 @@ async def run_plan_agent(
         allowed_tools=["Read", "Glob", "Grep", "Write"],
         cwd=cwd,
     )
-    async with ClaudeSDKClient(options=options) as client:
+    async with get_sdk_client(options, sim_plan_path=plan_path) as client:
         await client.query(prompt)
         await receive_from_client(client)
 

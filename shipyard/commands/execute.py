@@ -8,11 +8,11 @@ from importlib.resources import files as _res_files
 from pathlib import Path
 
 import click
-from claude_agent_sdk import AgentDefinition, ClaudeAgentOptions, ClaudeSDKClient
+from claude_agent_sdk import AgentDefinition, ClaudeAgentOptions
 
 from shipyard.schemas import Subtask, SubtaskList
 from shipyard.settings import EffortLevel, settings
-from shipyard.utils.agent import receive_from_client
+from shipyard.utils.agent import get_sdk_client, receive_from_client
 from shipyard.utils.gh import post_issue_comment, resolve_repo
 from shipyard.utils.git import get_head_sha, reset_hard
 
@@ -117,7 +117,7 @@ async def _run_issue_pipeline_inner(
         },
     )
 
-    async with ClaudeSDKClient(options=options) as client:
+    async with get_sdk_client(options) as client:
         # Implement
         await client.query(f"Use the shipyard-implementer skill.\n\n{task_context}")
 

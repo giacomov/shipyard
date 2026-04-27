@@ -1,10 +1,12 @@
 """Shared helpers for working with the claude_agent_sdk query loop."""
 
 import json
+from pathlib import Path
 
 import click
 from claude_agent_sdk import (
     AssistantMessage,
+    ClaudeAgentOptions,
     ClaudeSDKClient,
     Message,
     ResultMessage,
@@ -12,6 +14,47 @@ from claude_agent_sdk import (
     ThinkingBlock,
     ToolUseBlock,
 )
+
+from shipyard.sim import is_sim_mode
+
+
+class SimSDKClient:
+    """Async context manager that prints agent prompts instead of calling Claude."""
+
+    def __init__(self, sim_plan_path: str | None = None) -> None:
+        self._sim_plan_path = sim_plan_path
+
+    async def __aenter__(self) -> "SimSDKClient":
+        return self
+
+    async def __aexit__(self, *_: object) -> None:
+        pass
+
+    async def query(self, prompt: str) -> None:
+        click.echo(f"[sim] Would send to agent:\n{prompt}\n")
+        if self._sim_plan_path:
+            Path(self._sim_plan_path).parent.mkdir(parents=True, exist_ok=True)
+            Path(self._sim_plan_path).write_text(
+                "<!-- sim mode placeholder -->\n# Simulated Plan\n"
+            )
+
+    def receive_messages(self) -> "SimSDKClient":
+        return self
+
+    def __aiter__(self) -> "SimSDKClient":
+        return self
+
+    async def __anext__(self) -> Message:
+        raise StopAsyncIteration
+
+
+def get_sdk_client(
+    options: ClaudeAgentOptions, sim_plan_path: str | None = None
+) -> ClaudeSDKClient | SimSDKClient:
+    """Return a real Claude SDK client, or a SimSDKClient when SHIPYARD_SIM_MODE is set."""
+    if is_sim_mode():
+        return SimSDKClient(sim_plan_path=sim_plan_path)
+    return ClaudeSDKClient(options=options)
 
 
 def _print_message(message: Message) -> None:
@@ -53,7 +96,7 @@ def _print_message(message: Message) -> None:
                 raise RuntimeError(message.result or "Agent returned an error")
 
 
-async def receive_from_client(client: ClaudeSDKClient) -> str:
+async def receive_from_client(client: ClaudeSDKClient | SimSDKClient) -> str:
     """Drain messages from a client, printing each one. Returns collected text."""
     output_parts: list[str] = []
     async for message in client.receive_messages():

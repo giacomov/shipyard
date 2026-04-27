@@ -23,11 +23,8 @@ class IssueRef:
     database_id: int
 
 
-def create_issue(repo: str, title: str, body: str, dry_run: bool) -> IssueRef:
+def create_issue(repo: str, title: str, body: str) -> IssueRef:
     """Create a GitHub issue and return IssueRef with number, url, database_id."""
-    if dry_run:
-        print(f"  [dry-run] gh issue create: {title}")
-        return IssueRef(number=0, url="", database_id=0)
     url = gh(["issue", "create", "--repo", repo, "--title", title, "--body", body])
     m = re.search(r"/issues/(\d+)$", url)
     if not m:
@@ -43,7 +40,6 @@ def add_sub_issue(
     parent_number: int,
     child_database_id: int,
     child_number: int,
-    dry_run: bool,
 ) -> None:
     """Link child as sub-issue of parent."""
     owner, repo_name = repo.split("/", 1)
@@ -58,8 +54,6 @@ def add_sub_issue(
             "-F",
             f"sub_issue_id={child_database_id}",
         ],
-        dry_run=dry_run,
-        dry_label=f"add #{child_number} as sub-issue of #{parent_number}",
     )
 
 
@@ -69,7 +63,6 @@ def add_blocked_by(
     blocked_database_id: int,
     blocking_number: int,
     blocking_database_id: int,
-    dry_run: bool,
 ) -> None:
     """Mark blocked_number as blocked by blocking_number. Soft-fails on 404."""
     owner, repo_name = repo.split("/", 1)
@@ -83,8 +76,6 @@ def add_blocked_by(
                 "-F",
                 f"issue_id={blocking_database_id}",
             ],
-            dry_run=dry_run,
-            dry_label=f"mark #{blocked_number} blocked by #{blocking_number}",
         )
     except RuntimeError as e:
         msg = str(e)
@@ -104,15 +95,14 @@ def ensure_label_exists(repo: str, name: str, color: str, description: str) -> N
     gh(["label", "create", name, "--repo", repo, "--color", color, "--description", description])
 
 
-def add_in_progress_label(repo: str, issue_number: int, dry_run: bool) -> None:
+def add_in_progress_label(repo: str, issue_number: int) -> None:
     """Ensure 'in-progress' label exists, then apply it to the issue."""
-    if not dry_run:
-        ensure_label_exists(
-            repo,
-            settings.epic_status_label,
-            settings.epic_label_color,
-            "Work is actively being driven by the epic driver",
-        )
+    ensure_label_exists(
+        repo,
+        settings.epic_status_label,
+        settings.epic_label_color,
+        "Work is actively being driven by the epic driver",
+    )
     gh(
         [
             "issue",
@@ -123,8 +113,6 @@ def add_in_progress_label(repo: str, issue_number: int, dry_run: bool) -> None:
             "--add-label",
             settings.epic_status_label,
         ],
-        dry_run=dry_run,
-        dry_label=f"add in-progress label to #{issue_number}",
     )
 
 
@@ -153,15 +141,13 @@ def validate(task_list: SubtaskList) -> None:
                 raise ValueError(f'Task {task_id} has unknown dependency "{dep}".')
 
 
-def run_sync(task_list: SubtaskList, repo: str, dry_run: bool, skip_label: bool = False) -> int:
+def run_sync(task_list: SubtaskList, repo: str, skip_label: bool = False) -> int:
     """Main sync logic. Returns exit code (0=success, 1=partial failures)."""
     failures: list[str] = []
     tasks = list(task_list.tasks.values())
 
     print(f"\nRepository: {repo}")
     print(f"Tasks: {len(tasks)}")
-    if dry_run:
-        print("Mode: dry-run (no API calls)\n")
 
     # 1. Create parent epic issue
     print(f'\n── Creating parent issue: "{task_list.title}"')
@@ -170,10 +156,8 @@ def run_sync(task_list: SubtaskList, repo: str, dry_run: bool, skip_label: bool 
             repo,
             task_list.title,
             task_list.description or f"Task list with {len(tasks)} items.",
-            dry_run,
         )
-        if not dry_run:
-            print(f"   → #{parent.number}")
+        print(f"   → #{parent.number}")
     except RuntimeError as e:
         print(f"   FAILED: {e}")
         return 1
@@ -184,10 +168,9 @@ def run_sync(task_list: SubtaskList, repo: str, dry_run: bool, skip_label: bool 
     for subtask in tasks:
         print(f"   [{subtask.task_id}] {subtask.title}")
         try:
-            ref = create_issue(repo, subtask.title, task_body(subtask), dry_run)
+            ref = create_issue(repo, subtask.title, task_body(subtask))
             issue_map[subtask.task_id] = ref
-            if not dry_run:
-                print(f"         → #{ref.number}")
+            print(f"         → #{ref.number}")
         except RuntimeError as e:
             print(f"         FAILED: {e}")
             failures.append(f"create issue for task {subtask.task_id}: {e}")
@@ -199,7 +182,7 @@ def run_sync(task_list: SubtaskList, repo: str, dry_run: bool, skip_label: bool 
         if entry is None:
             continue
         try:
-            add_sub_issue(repo, parent.number, entry.database_id, entry.number, dry_run)
+            add_sub_issue(repo, parent.number, entry.database_id, entry.number)
         except RuntimeError as e:
             print(f"   FAILED: {e}")
             failures.append(f"sub-issue link for task {subtask.task_id}: {e}")
@@ -213,9 +196,7 @@ def run_sync(task_list: SubtaskList, repo: str, dry_run: bool, skip_label: bool 
             blocking = issue_map.get(blocking_id)
             if not blocked or not blocking:
                 continue
-            print(
-                f"   #{blocked.number if not dry_run else f'({blocked_id})'} blocked by #{blocking.number if not dry_run else f'({blocking_id})'}"
-            )
+            print(f"   #{blocked.number} blocked by #{blocking.number}")
             try:
                 add_blocked_by(
                     repo,
@@ -223,7 +204,6 @@ def run_sync(task_list: SubtaskList, repo: str, dry_run: bool, skip_label: bool 
                     blocked.database_id,
                     blocking.number,
                     blocking.database_id,
-                    dry_run,
                 )
             except RuntimeError as e:
                 print(f"   FAILED: {e}")
@@ -233,9 +213,8 @@ def run_sync(task_list: SubtaskList, repo: str, dry_run: bool, skip_label: bool 
     if not skip_label:
         print("\n── Marking epic as in-progress")
         try:
-            add_in_progress_label(repo, parent.number, dry_run)
-            if not dry_run:
-                print(f'   → added "in-progress" label to #{parent.number}')
+            add_in_progress_label(repo, parent.number)
+            print(f'   → added "in-progress" label to #{parent.number}')
         except RuntimeError as e:
             print(f"   WARNING: could not add in-progress label: {e}")
             failures.append(f"add in-progress label: {e}")
@@ -243,26 +222,22 @@ def run_sync(task_list: SubtaskList, repo: str, dry_run: bool, skip_label: bool 
     # 6. Create and push epic branch
     epic_branch = f"shipyard/epic-{parent.number}"
     click.echo(f"\n── Creating epic branch: {epic_branch}")
-    if not dry_run:
-        try:
-            checkout_new_branch(epic_branch)
-            push(epic_branch, set_upstream=True)
-            click.echo(f"   → pushed {epic_branch}")
-        except RuntimeError as e:
-            click.echo(f"   WARNING: could not create/push epic branch: {e}")
-            failures.append(f"create epic branch: {e}")
-    else:
-        click.echo(f"   [dry-run] Would create and push branch: {epic_branch}")
+    try:
+        checkout_new_branch(epic_branch)
+        push(epic_branch, set_upstream=True)
+        click.echo(f"   → pushed {epic_branch}")
+    except RuntimeError as e:
+        click.echo(f"   WARNING: could not create/push epic branch: {e}")
+        failures.append(f"create epic branch: {e}")
 
     # 7. Summary
     print("\n── Summary")
-    if not dry_run:
-        print(f"   Epic branch:  {epic_branch}")
-        print(f"   Parent issue: https://github.com/{repo}/issues/{parent.number}")
-        for subtask in tasks:
-            entry = issue_map.get(subtask.task_id)
-            if entry:
-                print(f"   [{subtask.task_id}] {subtask.title[:60]} → #{entry.number}")
+    print(f"   Epic branch:  {epic_branch}")
+    print(f"   Parent issue: https://github.com/{repo}/issues/{parent.number}")
+    for subtask in tasks:
+        entry = issue_map.get(subtask.task_id)
+        if entry:
+            print(f"   [{subtask.task_id}] {subtask.title[:60]} → #{entry.number}")
     if failures:
         print(f"\n   {len(failures)} failure(s):")
         for f in failures:
@@ -282,7 +257,6 @@ def run_sync(task_list: SubtaskList, repo: str, dry_run: bool, skip_label: bool 
     help="Input tasks.json (default: stdin)",
 )
 @click.option("--repo", default=None, help="Target repo as owner/repo (default: auto-detect)")
-@click.option("--dry-run", is_flag=True, help="Print actions without making API calls")
 @click.option(
     "--no-in-progress-label",
     "no_in_progress_label",
@@ -290,9 +264,7 @@ def run_sync(task_list: SubtaskList, repo: str, dry_run: bool, skip_label: bool 
     default=False,
     help="Skip adding the in-progress label to the epic issue.",
 )
-def sync(
-    input_file: str | None, repo: str | None, dry_run: bool, no_in_progress_label: bool
-) -> None:
+def sync(input_file: str | None, repo: str | None, no_in_progress_label: bool) -> None:
     """Sync task JSON to GitHub Issues."""
     if input_file:
         data = json.loads(Path(input_file).read_text())
@@ -309,7 +281,7 @@ def sync(
     except ValueError as e:
         raise click.ClickException(str(e))
 
-    resolved_repo = resolve_repo(repo, dry_run)
-    exit_code = run_sync(task_list, resolved_repo, dry_run, skip_label=no_in_progress_label)
+    resolved_repo = resolve_repo(repo)
+    exit_code = run_sync(task_list, resolved_repo, skip_label=no_in_progress_label)
     if exit_code != 0:
         raise SystemExit(exit_code)
