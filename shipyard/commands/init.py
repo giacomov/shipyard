@@ -133,6 +133,8 @@ def init(path: str, force: bool, skip_plan_driver: bool, dev: str | None) -> Non
         "\n"
         "       mkdir -p .claude\n"
         "       ln -s .agents .claude/skills\n"
+        "       git add .claude\n"
+        "       git commit -m 'chore: link shipyard skills for Claude Code'\n"
         "\n"
         "  4. Allow Actions to create pull requests:\n"
         "     Settings -> Actions -> General -> Workflow permissions\n"
