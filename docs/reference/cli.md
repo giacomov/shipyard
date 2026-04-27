@@ -12,7 +12,7 @@ shipyard --help
 
 Set up the Shipyard workflows in a repository.
 
-**Purpose:** Copies the bundled `epic-driver.yml`, `plan-driver.yml`, and `sync-driver.yml` templates into `.github/workflows/` and substitutes `SHIPYARD_VERSION` with the installed package version (or `main` when `--from-main` is set).
+**Purpose:** Copies the bundled `epic-driver.yml`, `plan-driver.yml`, and `sync-driver.yml` templates into `.github/workflows/` and substitutes `SHIPYARD_VERSION` with the installed package version (or the given branch when `--dev BRANCH` is set).
 
 **Arguments and flags:**
 
@@ -21,7 +21,7 @@ Set up the Shipyard workflows in a repository.
 | `PATH` | positional argument | Target repository directory (default: `.`) |
 | `--force` | flag | Overwrite existing workflow files |
 | `--skip-plan-driver` | flag | Only install `epic-driver.yml`, skip `plan-driver.yml` and `sync-driver.yml` |
-| `--from-main` | flag | Install shipyard from HEAD of `main` instead of the pinned version |
+| `--dev BRANCH` | option | Install shipyard from this branch instead of the pinned version |
 
 **Outputs:** Creates `.github/workflows/epic-driver.yml`, `plan-driver.yml`, and `sync-driver.yml` (the latter two skipped when `--skip-plan-driver` is set) in the target directory.
 
@@ -38,7 +38,10 @@ shipyard init ../my-other-repo
 shipyard init --force
 
 # Install from main branch (useful before tagging a release)
-shipyard init --from-main
+shipyard init --dev main
+
+# Install from a feature branch
+shipyard init --dev my-feature-branch
 
 # Only install the epic driver
 shipyard init --skip-plan-driver

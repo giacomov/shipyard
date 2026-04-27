@@ -126,3 +126,19 @@ def test_init_pins_version_in_sync_driver(tmp_path: Path) -> None:
     version = importlib.metadata.version("shipyard")
     assert "SHIPYARD_VERSION" not in content
     assert version in content
+
+
+def test_init_dev_uses_given_branch(tmp_path: Path) -> None:
+    runner = CliRunner()
+    result = runner.invoke(init, [str(tmp_path), "--dev", "main"])
+    assert result.exit_code == 0, result.output
+    content = (tmp_path / ".github" / "workflows" / "epic-driver.yml").read_text()
+    assert "giacomov/shipyard@main" in content
+
+
+def test_init_dev_uses_custom_branch(tmp_path: Path) -> None:
+    runner = CliRunner()
+    result = runner.invoke(init, [str(tmp_path), "--dev", "my-feature"])
+    assert result.exit_code == 0, result.output
+    content = (tmp_path / ".github" / "workflows" / "epic-driver.yml").read_text()
+    assert "giacomov/shipyard@my-feature" in content

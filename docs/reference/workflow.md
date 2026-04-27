@@ -34,7 +34,7 @@ The `find-work` job has an additional `if:` guard to ignore irrelevant events:
 `shipyard init [PATH]` copies all three templates from the installed package and substitutes `SHIPYARD_VERSION`:
 
 ```python
-install_ref = "main"  # if --from-main, else the package version e.g. "0.1.0"
+install_ref = "my-branch"  # if --dev my-branch, else the package version e.g. "0.1.0"
 content = template.read_text().replace("SHIPYARD_VERSION", install_ref)
 ```
 
@@ -44,7 +44,7 @@ The result is a workflow that installs shipyard from a specific git ref:
 run: uv tool install "git+https://github.com/giacomov/shipyard@0.1.0"
 ```
 
-Use `--from-main` to install from the HEAD of `main` instead of a pinned tag. Use `--force` to overwrite existing files. Use `--skip-plan-driver` to only install `epic-driver.yml`.
+Use `--dev BRANCH` to install from a branch instead of a pinned tag. Use `--force` to overwrite existing files. Use `--skip-plan-driver` to only install `epic-driver.yml`.
 
 ### Job structure
 

@@ -16,12 +16,12 @@ _TEMPLATES = _res_files("shipyard.data.templates")
     "--skip-plan-driver", is_flag=True, default=False, help="Skip installing plan-driver.yml"
 )
 @click.option(
-    "--from-main",
-    is_flag=True,
-    default=False,
-    help="Install shipyard from HEAD of main instead of pinned version",
+    "--dev",
+    default=None,
+    metavar="BRANCH",
+    help="Install shipyard from this branch instead of the pinned version (e.g. --dev main)",
 )
-def init(path: str, force: bool, skip_plan_driver: bool, from_main: bool) -> None:
+def init(path: str, force: bool, skip_plan_driver: bool, dev: str | None) -> None:
     """Set up the Shipyard epic-driver workflow in a repository.
 
     PATH defaults to the current directory.
@@ -40,8 +40,8 @@ def init(path: str, force: bool, skip_plan_driver: bool, from_main: bool) -> Non
     if not skip_plan_driver and sync_dest.exists() and not force:
         raise click.ClickException(f"{sync_dest} already exists. Use --force to overwrite.")
 
-    if from_main:
-        install_ref = "main"
+    if dev is not None:
+        install_ref = dev
     else:
         try:
             install_ref = importlib.metadata.version("shipyard")
