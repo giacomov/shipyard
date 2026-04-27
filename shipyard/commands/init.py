@@ -11,7 +11,6 @@ _TEMPLATES = _res_files("shipyard.data.templates")
 _SKILLS = _res_files("shipyard.data.skills")
 
 _SKILL_NAMES = [
-    "shipyard-system-prompt",
     "shipyard-implementer",
     "shipyard-spec-reviewer",
     "shipyard-code-quality-reviewer",
