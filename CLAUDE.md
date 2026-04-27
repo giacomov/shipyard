@@ -118,5 +118,5 @@ GitHub Issues are the only persistent store — no database. The epic issue is t
 
 - `find_work.py`, `execute.py`, `plan.py`, and `publish.py` are CI-only (driven entirely by env vars, no interactive options).
 - All GitHub API calls in `sync.py` and `find_work.py` go through the `gh` CLI as subprocesses.
-- The bundled workflow templates use `SHIPYARD_VERSION` as a placeholder; `shipyard init` substitutes it with the package version (or `main` when `--from-main` is passed).
+- The bundled workflow templates use `SHIPYARD_VERSION` as a placeholder; `shipyard init` substitutes it with the package version (or the given branch when `--dev BRANCH` is passed).
 - PRs are opened against the epic base branch passed via `--base-branch` to `shipyard publish-execution` (default: `settings.pr_base_branch`, which is `main`).
