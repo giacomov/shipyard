@@ -35,7 +35,7 @@ jobs:
       - uses: astral-sh/setup-uv@v4
 
       - name: Install shipyard
-        run: uv tool install "git+https://github.com/giacomov/shipyard@main"
+        run: uv tool install "git+https://github.com/giacomov/shipyard@giacomo/use-skills"
 
       - name: Find epic and unblocked issues
         id: find-work
@@ -71,7 +71,7 @@ jobs:
       - uses: astral-sh/setup-uv@v4
 
       - name: Install shipyard
-        run: uv tool install "git+https://github.com/giacomov/shipyard@main"
+        run: uv tool install "git+https://github.com/giacomov/shipyard@giacomo/use-skills"
 
       - name: Write work JSON to file
         env:
@@ -126,7 +126,7 @@ jobs:
       - uses: astral-sh/setup-uv@v4
 
       - name: Install shipyard
-        run: uv tool install "git+https://github.com/giacomov/shipyard@main"
+        run: uv tool install "git+https://github.com/giacomov/shipyard@giacomo/use-skills"
 
       - name: Check out epic branch and compute base SHA
         run: |
