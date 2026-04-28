@@ -34,16 +34,6 @@ jobs:
     steps:
       - uses: astral-sh/setup-uv@v4
 
-      - name: Ensure gh CLI is available
-        run: |
-          command -v gh && exit 0
-          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-            | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] \
-            https://cli.github.com/packages stable main" \
-            | tee /etc/apt/sources.list.d/github-cli.list
-          apt-get update -qq && apt-get install -y gh
-
       - name: Install shipyard
         run: uv tool install "git+https://github.com/giacomov/shipyard@SHIPYARD_VERSION"
 
@@ -79,16 +69,6 @@ jobs:
           git config user.name "github-actions[bot]"
 
       - uses: astral-sh/setup-uv@v4
-
-      - name: Ensure gh CLI is available
-        run: |
-          command -v gh && exit 0
-          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-            | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] \
-            https://cli.github.com/packages stable main" \
-            | tee /etc/apt/sources.list.d/github-cli.list
-          apt-get update -qq && apt-get install -y gh
 
       - name: Install shipyard
         run: uv tool install "git+https://github.com/giacomov/shipyard@SHIPYARD_VERSION"
@@ -149,16 +129,6 @@ jobs:
           git config user.name "github-actions[bot]"
 
       - uses: astral-sh/setup-uv@v4
-
-      - name: Ensure gh CLI is available
-        run: |
-          command -v gh && exit 0
-          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-            | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] \
-            https://cli.github.com/packages stable main" \
-            | tee /etc/apt/sources.list.d/github-cli.list
-          apt-get update -qq && apt-get install -y gh
 
       - name: Install shipyard
         run: uv tool install "git+https://github.com/giacomov/shipyard@SHIPYARD_VERSION"
