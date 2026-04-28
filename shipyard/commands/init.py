@@ -132,7 +132,7 @@ def init(path: str, force: bool, skip_plan_driver: bool, dev: str | None) -> Non
         "     can discover them:\n"
         "\n"
         "       mkdir -p .claude\n"
-        "       ln -s .agents .claude/skills\n"
+        '       ln -s "$(pwd)/.agents" .claude/skills\n'
         "       git add .claude\n"
         "       git commit -m 'chore: link shipyard skills for Claude Code'\n"
         "\n"
