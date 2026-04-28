@@ -5,29 +5,15 @@ import asyncio
 from importlib.resources import files as _res_files
 
 import click
-from claude_agent_sdk import AgentDefinition, ClaudeAgentOptions, ClaudeSDKClient
+from claude_agent_sdk import AgentDefinition, ClaudeAgentOptions
 
 from shipyard.settings import settings
-from shipyard.utils.agent import receive_from_client
+from shipyard.utils.agent import get_sdk_client, receive_from_client
 
 _system_prompt = _res_files("shipyard.data.prompts").joinpath("system-prompt.md").read_text()
 
 
 async def _run_update_docs(base_sha: str) -> None:
-    doc_agent_prompt = (
-        _res_files("shipyard.data.prompts")
-        .joinpath("doc_agent.md")
-        .read_text()
-        .format(BASE_SHA=base_sha)
-    )
-
-    doc_verifier_prompt = (
-        _res_files("shipyard.data.prompts")
-        .joinpath("doc-verifier.md")
-        .read_text()
-        .format(BASE_SHA=base_sha)
-    )
-
     options = ClaudeAgentOptions(
         permission_mode="dontAsk",
         allowed_tools=["Read", "Write", "Edit", "Bash", "Monitor", "Grep", "Glob", "Agent"],
@@ -38,7 +24,7 @@ async def _run_update_docs(base_sha: str) -> None:
         agents={
             "doc_verifier": AgentDefinition(
                 description="Documentation verifier. Reviews documentation changes for accuracy and completeness against the code diff, then reports issues or LGTM.",
-                prompt=doc_verifier_prompt,
+                prompt="Use the shipyard-doc-verifier skill.",
                 tools=["Bash", "Read", "Grep", "Glob"],
                 model=settings.doc_review_model,
                 effort=settings.doc_review_effort,
@@ -46,9 +32,13 @@ async def _run_update_docs(base_sha: str) -> None:
         },
     )
 
-    async with ClaudeSDKClient(options=options) as client:
+    async with get_sdk_client(options=options) as client:
         # Write/update documentation
-        await client.query(doc_agent_prompt)
+        await client.query(
+            f"Use the shipyard-doc-agent skill.\n\n"
+            f"Focus your work on files that recently changed:\n\n"
+            f"```bash\ngit diff --stat {base_sha}..HEAD\ngit diff {base_sha}..HEAD\n```"
+        )
         await receive_from_client(client)
 
         # Stage and commit doc changes

@@ -3,9 +3,22 @@
 
 import subprocess
 
+import click
+
+from shipyard.sim import is_sim_mode
+
+_MUTATING_GIT_SUBCOMMANDS = {"push", "commit", "checkout", "reset", "add", "merge"}
+
 
 def git(args: list[str]) -> str:
-    """Run a git command and return trimmed stdout. Raises RuntimeError on non-zero exit."""
+    """Run a git command and return trimmed stdout.
+
+    Raises RuntimeError on non-zero exit. In sim mode, mutating subcommands
+    (push, commit, checkout, reset, add, merge) print [sim] lines and no-op.
+    """
+    if is_sim_mode() and args and args[0] in _MUTATING_GIT_SUBCOMMANDS:
+        click.echo(f"[sim] git {' '.join(args)}")
+        return ""
     result = subprocess.run(["git"] + args, capture_output=True, text=True)
     if result.returncode != 0:
         raise RuntimeError(

@@ -33,25 +33,41 @@ def test_gh_raises_runtime_error_on_failure() -> None:
             gh(["repo", "view"])
 
 
-def test_gh_dry_run_returns_empty_string(capsys: pytest.CaptureFixture[str]) -> None:
+def test_gh_sim_mode_issue_create_intercepted(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("SHIPYARD_SIM_MODE", "true")
     with patch("subprocess.run") as mock_run:
-        result = gh(["issue", "create", "--title", "Test"], dry_run=True)
+        result = gh(["issue", "create", "--repo", "owner/repo", "--title", "Test"])
 
-    assert result == ""
     mock_run.assert_not_called()
+    assert "owner/repo/issues/999" in result
     captured = capsys.readouterr()
-    assert "dry-run" in captured.out
+    assert "[sim]" in captured.out
     assert "issue" in captured.out
 
 
-def test_gh_dry_run_with_label(capsys: pytest.CaptureFixture[str]) -> None:
+def test_gh_sim_mode_api_post_intercepted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SHIPYARD_SIM_MODE", "true")
     with patch("subprocess.run") as mock_run:
-        result = gh(["api", "some/path"], dry_run=True, dry_label="create sub-issue")
-
-    assert result == ""
+        result = gh(["api", "repos/owner/repo/something", "--method", "POST"])
     mock_run.assert_not_called()
-    captured = capsys.readouterr()
-    assert "create sub-issue" in captured.out
+    assert result == "{}"
+
+
+def test_gh_sim_mode_read_only_executes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SHIPYARD_SIM_MODE", "true")
+    mock_result = MagicMock()
+    mock_result.returncode = 0
+    mock_result.stdout = "output\n"
+    with patch("subprocess.run", return_value=mock_result) as mock_run:
+        result = gh(["issue", "list", "--repo", "owner/repo"])
+    mock_run.assert_called_once()
+    assert result == "output"
 
 
 def test_gh_error_message_includes_args() -> None:
@@ -86,11 +102,6 @@ def test_resolve_repo_calls_gh_when_no_flag() -> None:
         result = resolve_repo()
 
     assert result == "owner/repo"
-
-
-def test_resolve_repo_returns_placeholder_on_dry_run_empty() -> None:
-    result = resolve_repo(dry_run=True)
-    assert result == "<owner>/<repo>"
 
 
 # ---------------------------------------------------------------------------

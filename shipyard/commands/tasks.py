@@ -18,6 +18,7 @@ from claude_agent_sdk import (
 
 from shipyard.schemas import Subtask, SubtaskList
 from shipyard.settings import settings
+from shipyard.sim import is_sim_mode
 from shipyard.utils.agent import receive_from_client
 
 _system_prompt = _res_files("shipyard.data.prompts").joinpath("system-prompt.md").read_text()
@@ -26,6 +27,16 @@ _TASKS_JSON_EXCLUDE: dict = {"committed": True, "drafting": True, "epic_id": Tru
 
 
 async def _run_task_agent(prompt: str, cwd: str, task_list: SubtaskList) -> None:
+    if is_sim_mode():
+        click.echo(f"[sim] Would send to agent:\n{prompt}\n")
+        task_list.tasks["T1"] = Subtask(
+            task_id="T1",
+            title="Simulated Task",
+            description="Placeholder task created in sim mode.",
+        )
+        task_list.committed = True
+        return
+
     # Define the custom tools
     @tool(
         "create_task",

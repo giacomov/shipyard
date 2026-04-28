@@ -1,0 +1,4 @@
+--env SHIPYARD_SIM_MODE=true
+--env UV_NO_PROGRESS=1
+--platform ubuntu-latest=shipyard-act:latest
+--pull=false

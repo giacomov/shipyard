@@ -216,7 +216,7 @@ async def test_run_plan_agent_retries_on_missing_file(tmp_cwd: Any) -> None:
     mock_client.__aexit__ = AsyncMock(return_value=False)
 
     with (
-        patch("shipyard.commands.plan.ClaudeSDKClient", return_value=mock_client),
+        patch("shipyard.commands.plan.get_sdk_client", return_value=mock_client),
         patch("shipyard.commands.plan.receive_from_client", side_effect=fake_receive),
     ):
         await run_plan_agent(
@@ -261,7 +261,7 @@ async def test_run_plan_agent_detects_unchanged_file_on_replan(tmp_cwd: Any) -> 
     mock_client.__aexit__ = AsyncMock(return_value=False)
 
     with (
-        patch("shipyard.commands.plan.ClaudeSDKClient", return_value=mock_client),
+        patch("shipyard.commands.plan.get_sdk_client", return_value=mock_client),
         patch("shipyard.commands.plan.receive_from_client", side_effect=fake_receive),
     ):
         await run_plan_agent(

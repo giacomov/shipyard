@@ -1,5 +1,5 @@
 import json
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from click.testing import CliRunner
@@ -40,18 +40,62 @@ def test_gh_raises_on_nonzero(mock_subprocess):
         gh(["issue", "create", "--title", "x"])
 
 
-def test_gh_dry_run_prints_and_returns_empty(capsys):
-    result = gh(["issue", "list"], dry_run=True)
-    assert result == ""
+def test_gh_sim_mode_issue_create_returns_mock_url(monkeypatch, capsys):
+    monkeypatch.setenv("SHIPYARD_SIM_MODE", "true")
+    result = gh(["issue", "create", "--repo", "owner/repo", "--title", "T", "--body", "B"])
+    assert "owner/repo/issues/999" in result
     out = capsys.readouterr().out
-    assert "dry-run" in out
-    assert "issue list" in out
+    assert "[sim]" in out
+    assert "issue create" in out
 
 
-def test_gh_dry_run_includes_label(capsys):
-    gh(["issue", "list"], dry_run=True, dry_label="my label")
+def test_gh_sim_mode_pr_create_returns_mock_url(monkeypatch):
+    monkeypatch.setenv("SHIPYARD_SIM_MODE", "true")
+    result = gh(
+        [
+            "pr",
+            "create",
+            "--repo",
+            "owner/repo",
+            "--title",
+            "T",
+            "--body",
+            "B",
+            "--base",
+            "main",
+            "--head",
+            "feat",
+        ]
+    )
+    assert "owner/repo/pull/999" in result
+
+
+def test_gh_sim_mode_api_post_intercepted(monkeypatch, capsys):
+    monkeypatch.setenv("SHIPYARD_SIM_MODE", "true")
+    result = gh(
+        [
+            "api",
+            "repos/owner/repo/issues/1/sub_issues",
+            "--method",
+            "POST",
+            "-F",
+            "sub_issue_id=123",
+        ]
+    )
+    assert result == "{}"
     out = capsys.readouterr().out
-    assert "my label" in out
+    assert "[sim]" in out
+
+
+def test_gh_sim_mode_read_only_not_intercepted(monkeypatch):
+    monkeypatch.setenv("SHIPYARD_SIM_MODE", "true")
+    mock_result = MagicMock()
+    mock_result.returncode = 0
+    mock_result.stdout = "output\n"
+    with patch("subprocess.run", return_value=mock_result) as mock_run:
+        result = gh(["issue", "list", "--repo", "owner/repo"])
+    assert result == "output"
+    mock_run.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -60,17 +104,12 @@ def test_gh_dry_run_includes_label(capsys):
 
 
 def test_resolve_repo_uses_flag():
-    assert resolve_repo("myorg/myrepo", dry_run=False) == "myorg/myrepo"
+    assert resolve_repo("myorg/myrepo") == "myorg/myrepo"
 
 
 @patch("shipyard.utils.gh.gh", return_value="owner/detected")
 def test_resolve_repo_auto_detects(mock_gh):
-    assert resolve_repo(None, dry_run=False) == "owner/detected"
-
-
-def test_resolve_repo_dry_run_placeholder():
-    result = resolve_repo(None, dry_run=True)
-    assert result == "<owner>/<repo>"
+    assert resolve_repo(None) == "owner/detected"
 
 
 # ---------------------------------------------------------------------------
@@ -88,17 +127,19 @@ def test_create_issue_parses_number_from_url(mock_subprocess):
         )(),
         type("R", (), {"returncode": 0, "stdout": "123456\n", "stderr": ""})(),
     ]
-    ref = create_issue("owner/repo", "My Title", "My Body", dry_run=False)
+    ref = create_issue("owner/repo", "My Title", "My Body")
     assert ref.number == 42
     assert ref.database_id == 123456
     assert ref.url == "https://github.com/owner/repo/issues/42"
 
 
-@patch("shipyard.utils.gh.subprocess")
-def test_create_issue_dry_run_makes_no_subprocess_calls(mock_subprocess):
-    ref = create_issue("owner/repo", "Title", "Body", dry_run=True)
-    mock_subprocess.run.assert_not_called()
-    assert ref.number == 0
+def test_create_issue_sim_mode_makes_no_subprocess_calls(monkeypatch):
+    monkeypatch.setenv("SHIPYARD_SIM_MODE", "true")
+    with patch("subprocess.run") as mock_run:
+        ref = create_issue("owner/repo", "Title", "Body")
+    mock_run.assert_not_called()
+    assert ref.number == 999
+    assert ref.database_id == 999
 
 
 @patch("shipyard.utils.gh.subprocess")
@@ -107,7 +148,7 @@ def test_create_issue_raises_on_bad_url(mock_subprocess):
     mock_subprocess.run.return_value.stdout = "not-a-url\n"
     mock_subprocess.run.return_value.stderr = ""
     with pytest.raises(RuntimeError, match="Unexpected gh issue create output"):
-        create_issue("owner/repo", "T", "B", dry_run=False)
+        create_issue("owner/repo", "T", "B")
 
 
 # ---------------------------------------------------------------------------
@@ -115,10 +156,11 @@ def test_create_issue_raises_on_bad_url(mock_subprocess):
 # ---------------------------------------------------------------------------
 
 
-def test_add_sub_issue_dry_run_prints(capsys):
-    add_sub_issue("owner/repo", 1, 999, 5, dry_run=True)
+def test_add_sub_issue_sim_mode_prints(monkeypatch, capsys):
+    monkeypatch.setenv("SHIPYARD_SIM_MODE", "true")
+    add_sub_issue("owner/repo", 1, 999, 5)
     out = capsys.readouterr().out
-    assert "dry-run" in out
+    assert "[sim]" in out
 
 
 # ---------------------------------------------------------------------------
@@ -131,7 +173,7 @@ def test_add_blocked_by_404_is_soft_failure(mock_subprocess, capsys):
     mock_subprocess.run.return_value.returncode = 1
     mock_subprocess.run.return_value.stderr = "404 Not Found"
     mock_subprocess.run.return_value.stdout = ""
-    add_blocked_by("owner/repo", 5, 500, 3, 300, dry_run=False)
+    add_blocked_by("owner/repo", 5, 500, 3, 300)
     captured = capsys.readouterr()
     assert "WARNING" in captured.out or "dependencies API" in captured.out
 
@@ -142,13 +184,14 @@ def test_add_blocked_by_reraises_non_404(mock_subprocess):
     mock_subprocess.run.return_value.stderr = "500 Internal Server Error"
     mock_subprocess.run.return_value.stdout = ""
     with pytest.raises(RuntimeError):
-        add_blocked_by("owner/repo", 5, 500, 3, 300, dry_run=False)
+        add_blocked_by("owner/repo", 5, 500, 3, 300)
 
 
-def test_add_blocked_by_dry_run(capsys):
-    add_blocked_by("owner/repo", 5, 500, 3, 300, dry_run=True)
+def test_add_blocked_by_sim_mode(monkeypatch, capsys):
+    monkeypatch.setenv("SHIPYARD_SIM_MODE", "true")
+    add_blocked_by("owner/repo", 5, 500, 3, 300)
     out = capsys.readouterr().out
-    assert "dry-run" in out
+    assert "[sim]" in out
 
 
 # ---------------------------------------------------------------------------
@@ -250,7 +293,7 @@ def test_validate_raises_on_unknown_dependency():
 
 
 # ---------------------------------------------------------------------------
-# run_sync — dry-run integration
+# run_sync — sim mode integration
 # ---------------------------------------------------------------------------
 
 
@@ -263,15 +306,21 @@ def _minimal_plan(*, with_deps: bool = False) -> SubtaskList:
     return SubtaskList(title="My Plan", description="Goal.", tasks=tasks)
 
 
-def test_run_sync_dry_run_succeeds(capsys):
-    code = run_sync(_minimal_plan(), "owner/repo", dry_run=True)
+def test_run_sync_sim_mode_succeeds(monkeypatch, capsys):
+    monkeypatch.setenv("SHIPYARD_SIM_MODE", "true")
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0, stdout="existing-label\n", stderr="")
+        code = run_sync(_minimal_plan(), "owner/repo")
     assert code == 0
     out = capsys.readouterr().out
-    assert "dry-run" in out
+    assert "[sim]" in out
 
 
-def test_run_sync_dry_run_with_dependencies(capsys):
-    code = run_sync(_minimal_plan(with_deps=True), "owner/repo", dry_run=True)
+def test_run_sync_sim_mode_with_dependencies(monkeypatch, capsys):
+    monkeypatch.setenv("SHIPYARD_SIM_MODE", "true")
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0, stdout="existing-label\n", stderr="")
+        code = run_sync(_minimal_plan(with_deps=True), "owner/repo")
     assert code == 0
     out = capsys.readouterr().out
     assert "blocked" in out.lower() or "blocked-by" in out.lower()
@@ -279,7 +328,7 @@ def test_run_sync_dry_run_with_dependencies(capsys):
 
 @patch("shipyard.commands.sync.create_issue", side_effect=RuntimeError("API down"))
 def test_run_sync_parent_creation_failure_returns_1(mock_create, capsys):
-    code = run_sync(_minimal_plan(), "owner/repo", dry_run=False)
+    code = run_sync(_minimal_plan(), "owner/repo")
     assert code == 1
 
 
@@ -302,11 +351,14 @@ def _minimal_plan_json(*, with_deps: bool = False) -> str:
     return json.dumps({"title": "My Plan", "description": "Goal.", "tasks": tasks})
 
 
-def test_sync_cli_dry_run_from_stdin():
+def test_sync_cli_sim_mode_from_stdin(monkeypatch):
     from shipyard.commands.sync import sync
 
+    monkeypatch.setenv("SHIPYARD_SIM_MODE", "true")
     runner = CliRunner()
-    result = runner.invoke(sync, ["--dry-run", "--repo", "owner/repo"], input=_minimal_plan_json())
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0, stdout="existing-label\n", stderr="")
+        result = runner.invoke(sync, ["--repo", "owner/repo"], input=_minimal_plan_json())
     assert result.exit_code == 0
 
 
@@ -314,7 +366,7 @@ def test_sync_cli_invalid_json_raises():
     from shipyard.commands.sync import sync
 
     runner = CliRunner()
-    result = runner.invoke(sync, ["--dry-run"], input="not json")
+    result = runner.invoke(sync, [], input="not json")
     assert result.exit_code != 0
 
 
@@ -323,16 +375,19 @@ def test_sync_cli_validation_error_shown():
 
     data = json.dumps({"title": "T", "description": "D", "tasks": {}})
     runner = CliRunner()
-    result = runner.invoke(sync, ["--dry-run"], input=data)
+    result = runner.invoke(sync, [], input=data)
     assert result.exit_code != 0
     assert "tasks" in result.output
 
 
-def test_sync_cli_file_input(tmp_path):
+def test_sync_cli_file_input(monkeypatch, tmp_path):
     from shipyard.commands.sync import sync
 
+    monkeypatch.setenv("SHIPYARD_SIM_MODE", "true")
     f = tmp_path / "tasks.json"
     f.write_text(_minimal_plan_json())
     runner = CliRunner()
-    result = runner.invoke(sync, ["--dry-run", "--repo", "owner/repo", "--input", str(f)])
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0, stdout="existing-label\n", stderr="")
+        result = runner.invoke(sync, ["--repo", "owner/repo", "--input", str(f)])
     assert result.exit_code == 0

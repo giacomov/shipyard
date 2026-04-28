@@ -1,0 +1,17 @@
+{
+  "action": "closed",
+  "pull_request": {
+    "merged": true,
+    "number": 88,
+    "head": {
+      "ref": "plan/i17"
+    },
+    "base": {
+      "ref": "main"
+    },
+    "body": "Closes #17",
+    "labels": [
+      { "name": "plan" }
+    ]
+  }
+}

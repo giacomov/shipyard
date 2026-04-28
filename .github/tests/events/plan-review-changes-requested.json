@@ -1,0 +1,21 @@
+{
+  "action": "submitted",
+  "review": {
+    "id": 1001,
+    "state": "CHANGES_REQUESTED",
+    "body": "Please revise section 2 to cover edge cases."
+  },
+  "pull_request": {
+    "number": 55,
+    "head": {
+      "ref": "plan/i17"
+    },
+    "base": {
+      "ref": "main"
+    },
+    "body": "Closes #17",
+    "labels": [
+      { "name": "plan" }
+    ]
+  }
+}

@@ -1,0 +1,38 @@
+#!/bin/bash
+if [ "${SHIPYARD_SIM_MODE}" = "true" ]; then
+  case "$1" in
+    push)
+      echo "[SIM] git push skipped" >&2
+      exit 0
+      ;;
+    fetch)
+      # Only suppress fetches from the named 'origin' remote (workflow steps like
+      # "git fetch origin shipyard/epic-*" fail because the branch doesn't exist).
+      # URL-based fetches (e.g. uv building shipyard from GitHub) must pass through
+      # unmodified so the SHA is available for the subsequent git reset.
+      if [ "$2" = "origin" ]; then
+        /usr/bin/git.real fetch "$@" 2>/dev/null || true
+        exit 0
+      fi
+      ;;
+    commit)
+      # Skip pre-commit hooks — hook deps (e.g. pre-commit tool) are not installed in the test image
+      shift
+      exec /usr/bin/git.real commit --no-verify "$@"
+      ;;
+    merge-base)
+      # origin/* refs don't exist because fetch is suppressed; return HEAD SHA instead
+      exec /usr/bin/git.real rev-parse HEAD
+      ;;
+    checkout)
+      # Only intercept simple "git checkout <branchname>" (no flags): fall back to -b if the
+      # branch doesn't exist locally. Leave flag-bearing calls (e.g. from actions/checkout)
+      # untouched so internal git operations aren't mangled.
+      if [ $# -eq 2 ] && [[ "$2" != -* ]]; then
+        /usr/bin/git.real checkout "$2" 2>/dev/null && exit 0
+        exec /usr/bin/git.real checkout -b "$2"
+      fi
+      ;;
+  esac
+fi
+exec /usr/bin/git.real "$@"

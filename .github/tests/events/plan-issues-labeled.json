@@ -1,0 +1,12 @@
+{
+  "action": "labeled",
+  "label": {
+    "name": "plan"
+  },
+  "issue": {
+    "number": 17,
+    "pull_request": "",
+    "title": "Add user authentication flow",
+    "body": "We need OAuth2 support for the API."
+  }
+}
