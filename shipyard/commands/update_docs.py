@@ -5,10 +5,10 @@ import asyncio
 from importlib.resources import files as _res_files
 
 import click
-from claude_agent_sdk import AgentDefinition, ClaudeAgentOptions, ClaudeSDKClient
+from claude_agent_sdk import AgentDefinition, ClaudeAgentOptions
 
 from shipyard.settings import settings
-from shipyard.utils.agent import receive_from_client
+from shipyard.utils.agent import get_sdk_client, receive_from_client
 
 _system_prompt = _res_files("shipyard.data.prompts").joinpath("system-prompt.md").read_text()
 
@@ -32,7 +32,7 @@ async def _run_update_docs(base_sha: str) -> None:
         },
     )
 
-    async with ClaudeSDKClient(options=options) as client:
+    async with get_sdk_client(options=options) as client:
         # Write/update documentation
         await client.query(
             f"Use the shipyard-doc-agent skill.\n\n"
