@@ -30,6 +30,7 @@ jobs:
     outputs:
       has_work: ${{ steps.find-work.outputs.has_work }}
       work_json: ${{ steps.find-work.outputs.work_json }}
+      epic_in_progress: ${{ steps.find-work.outputs.epic_in_progress }}
 
     steps:
       - uses: astral-sh/setup-uv@v4
@@ -106,6 +107,7 @@ jobs:
     needs: find-work
     if: |
       needs.find-work.outputs.has_work == 'false' &&
+      needs.find-work.outputs.epic_in_progress == 'true' &&
       github.event_name == 'pull_request' &&
       github.event.pull_request.merged == true
     runs-on: ubuntu-latest

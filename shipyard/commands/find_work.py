@@ -157,13 +157,18 @@ def find_work() -> None:
     epic_number = resolve_epic_number(event, issue_number, pr_body, owner, repo_name)
     if epic_number is None:
         set_output("has_work", "false")
+        set_output("epic_in_progress", "false")
         return
 
     print(f"Epic: #{epic_number}")
     epic_raw = gh_get(f"repos/{repo}/issues/{epic_number}")
     assert isinstance(epic_raw, dict), f"Expected dict from issues API, got {type(epic_raw)}"
     epic: dict = epic_raw
-    unblocked = find_unblocked_sub_issues(epic_number, repo)
+    set_output("epic_in_progress", "true")
+    closing = set(parse_closing_references(pr_body)) if event == "pull_request" else set()
+    unblocked = [
+        s for s in find_unblocked_sub_issues(epic_number, repo) if s["number"] not in closing
+    ]
 
     if not unblocked:
         print("No unblocked sub-issues — waiting for blockers to resolve.")
