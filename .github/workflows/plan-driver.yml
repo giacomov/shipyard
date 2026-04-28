@@ -31,7 +31,7 @@ jobs:
       - uses: astral-sh/setup-uv@v4
 
       - name: Install shipyard
-        run: uv tool install "git+https://github.com/giacomov/shipyard@giacomo/use-skills"
+        run: uv tool install "git+https://github.com/giacomov/shipyard@main"
 
       - name: Extract GitHub event context
         id: extract-event
@@ -105,7 +105,7 @@ jobs:
           else
             git commit -m "docs: add implementation plan for issue #${ISSUE}"
             git push -u origin "$BRANCH"
-            if ! gh pr view "$BRANCH" --repo "${{ github.repository }}" > /dev/null 2>&1; then
+            if ! gh pr view "$BRANCH" --repo "${{ github.repository }}" --json state --jq 'select(.state=="OPEN")' 2>/dev/null | grep -q OPEN; then
               gh label create plan --color "0052cc" --description "Implementation plan" \
                 --repo "${{ github.repository }}" 2>/dev/null || true
               PR_URL=$(gh pr create \
