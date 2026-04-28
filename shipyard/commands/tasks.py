@@ -10,7 +10,6 @@ from typing import Any
 import click
 from claude_agent_sdk import (
     ClaudeAgentOptions,
-    ClaudeSDKClient,
     ProcessError,
     create_sdk_mcp_server,
     tool,
@@ -18,7 +17,7 @@ from claude_agent_sdk import (
 
 from shipyard.schemas import Subtask, SubtaskList
 from shipyard.settings import settings
-from shipyard.utils.agent import receive_from_client
+from shipyard.utils.agent import get_sdk_client, receive_from_client
 
 _system_prompt = _res_files("shipyard.data.prompts").joinpath("system-prompt.md").read_text()
 
@@ -198,7 +197,7 @@ async def _run_task_agent(prompt: str, cwd: str, task_list: SubtaskList) -> None
         effort=settings.planning_effort,
     )
 
-    async with ClaudeSDKClient(options=options) as client:
+    async with get_sdk_client(options=options) as client:
         await client.query(prompt)
 
         await receive_from_client(client)
