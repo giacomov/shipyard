@@ -1,0 +1,11 @@
+{
+  "action": "labeled",
+  "label": {
+    "name": "in-progress"
+  },
+  "issue": {
+    "number": 42,
+    "pull_request": "",
+    "title": "My epic issue"
+  }
+}

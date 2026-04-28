@@ -1,0 +1,15 @@
+{
+  "action": "closed",
+  "pull_request": {
+    "merged": true,
+    "number": 99,
+    "head": {
+      "ref": "shipyard/epic-42-run-12345"
+    },
+    "base": {
+      "ref": "shipyard/epic-42"
+    },
+    "body": "Implements task #55\n\nCloses #55",
+    "labels": []
+  }
+}

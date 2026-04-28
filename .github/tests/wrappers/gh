@@ -1,0 +1,21 @@
+#!/bin/bash
+if [ "${SHIPYARD_SIM_MODE}" = "true" ]; then
+  echo "[SIM] gh $*" >&2
+  # Return plausible fake output for reads consumed by the workflow
+  case "$*" in
+    *"issue view"*"--jq"*)         echo "Simulated Issue Title" ;;
+    *"issue view"*"--json"*)       echo '{"number":17,"title":"Simulated Issue Title","body":"Simulated body."}' ;;
+    *"issue list"*"--json"*)       echo '[{"number":42}]' ;;
+    *"pr view"*)                   exit 1 ;;  # simulate "no PR exists yet"
+    # GraphQL: return no parent (treated as "not found"; fallback label search runs instead)
+    *"api"*"graphql"*)             echo '{"data":{"repository":{"issue":{"parent":null}}}}' ;;
+    # List sub-endpoints must come before the single-issue pattern (bash matches first)
+    *"api"*"/sub_issues"*)         echo '[]' ;;
+    *"api"*"/blocked_by"*)         echo '[]' ;;
+    # Single-resource issue endpoint — return a minimal but realistic issue object
+    *"api"*"/issues/"[0-9]*)       echo '{"number":42,"title":"Simulated Epic","body":"","state":"open","labels":[{"name":"in-progress"}]}' ;;
+    *"api"*)                       echo '[]' ;;
+  esac
+  exit 0
+fi
+exec /usr/local/bin/gh.real "$@"
