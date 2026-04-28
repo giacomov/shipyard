@@ -61,11 +61,6 @@ jobs:
             git checkout -b "plan/i${ISSUE}"
           fi
 
-      - name: Link agent skills for Claude Code
-        run: |
-          mkdir -p .claude
-          ln -s "$(pwd)/.agents/skills" .claude/
-
       - name: Generate or update plan
         if: steps.extract-event.outputs.review_target != 'implementation'
         env:

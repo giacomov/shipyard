@@ -33,11 +33,6 @@ jobs:
           ISSUE=$(echo "$BRANCH" | sed 's|plan/i||')
           echo "issue_number=${ISSUE}" >> "$GITHUB_OUTPUT"
 
-      - name: Link agent skills for Claude Code
-        run: |
-          mkdir -p .claude
-          ln -s "$(pwd)/.agents/skills" .claude/
-
       - name: Generate tasks.json from plan
         env:
           GH_TOKEN: ${{ github.token }}
