@@ -2,6 +2,7 @@
 """shipyard update-docs — run the documentation agent after an epic completes (CI use only)."""
 
 import asyncio
+import os
 from importlib.resources import files as _res_files
 
 import click
@@ -18,6 +19,7 @@ async def _run_update_docs(base_sha: str) -> None:
         permission_mode="dontAsk",
         allowed_tools=["Read", "Write", "Edit", "Bash", "Monitor", "Grep", "Glob", "Agent"],
         system_prompt=_system_prompt,
+        cwd=os.getcwd(),
         setting_sources=["project"],
         model=settings.doc_model,
         effort=settings.doc_effort,

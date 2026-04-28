@@ -32,6 +32,7 @@ async def run_plan_agent(
         permission_mode="bypassPermissions",
         allowed_tools=["Read", "Glob", "Grep", "Write"],
         cwd=cwd,
+        setting_sources=["project"],
     )
     async with get_sdk_client(options, sim_plan_path=plan_path) as client:
         await client.query(prompt)

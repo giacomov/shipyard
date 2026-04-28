@@ -3,6 +3,7 @@
 
 import asyncio
 import json
+import os
 from collections.abc import Callable
 from importlib.resources import files as _res_files
 from pathlib import Path
@@ -96,6 +97,7 @@ async def _run_issue_pipeline_inner(
         permission_mode="dontAsk",
         allowed_tools=["Read", "Write", "Edit", "Bash", "Monitor", "Grep", "Glob", "Agent"],
         system_prompt=_system_prompt,
+        cwd=os.getcwd(),
         setting_sources=["project"],
         model=model,
         effort=effort,
