@@ -92,7 +92,7 @@ jobs:
       - name: Link agent skills for Claude Code
         run: |
           mkdir -p .claude
-          ln -s "$(pwd)/.agents/skills" .claude/skills
+          ln -s "$(pwd)/.agents/skills" .claude/
 
       - name: Run agent pipeline
         env:
@@ -145,7 +145,7 @@ jobs:
       - name: Link agent skills for Claude Code
         run: |
           mkdir -p .claude
-          ln -s "$(pwd)/.agents/skills" .claude/skills
+          ln -s "$(pwd)/.agents/skills" .claude/
 
       - name: Run documentation agent
         env:
