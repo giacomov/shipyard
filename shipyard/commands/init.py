@@ -37,7 +37,7 @@ def _repo_root(path: str) -> Path:
 
 def _install_skills(repo_root: Path, force: bool) -> None:
     for name in _SKILL_NAMES:
-        dest_dir = repo_root / ".agents" / "skills" / name
+        dest_dir = repo_root / ".claude" / "skills" / name
         dest_dir.mkdir(parents=True, exist_ok=True)
         dest = dest_dir / "SKILL.md"
         if dest.exists() and not force:
@@ -122,7 +122,7 @@ def init(path: str, force: bool, skip_plan_driver: bool, dev: str | None) -> Non
         "\n"
         "  1. Commit the workflows and skills:\n"
         "\n"
-        "       git add .github .agents\n"
+        "       git add .github .claude\n"
         "       git commit -m 'chore: add shipyard workflows and agent skills'\n"
         "\n"
         "  2. Make sure CLAUDE_CODE_OAUTH_TOKEN is set as a secret in your repository.\n"
@@ -132,5 +132,5 @@ def init(path: str, force: bool, skip_plan_driver: bool, dev: str | None) -> Non
         "     Settings -> Actions -> General -> Workflow permissions\n"
         "     -> Allow GitHub Actions to create and approve pull requests\n"
         "\n"
-        "  Customize agent behavior by editing .agents/skills/shipyard-*/SKILL.md"
+        "  Customize agent behavior by editing .claude/skills/shipyard-*/SKILL.md"
     )
