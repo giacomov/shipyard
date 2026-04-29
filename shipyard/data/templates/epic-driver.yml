@@ -82,11 +82,11 @@ jobs:
       - name: Write work JSON to file
         env:
           WORK_JSON: ${{ needs.find-work.outputs.work_json }}
-        run: python3 -c "import os; open('work.json','w').write(os.environ['WORK_JSON'])"
+        run: python3 -c "import os; open('/tmp/work.json','w').write(os.environ['WORK_JSON'])"
 
       - name: Create implementation branch
         run: |
-          EPIC=$(python3 -c "import json; print(json.load(open('work.json'))['epic_id'])")
+          EPIC=$(python3 -c "import json; print(json.load(open('/tmp/work.json'))['epic_id'])")
           EPIC_BRANCH="shipyard/epic-${EPIC}"
           BRANCH="${EPIC_BRANCH}-run-${{ github.run_id }}"
           git fetch origin "$EPIC_BRANCH"
@@ -99,13 +99,13 @@ jobs:
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           GH_TOKEN: ${{ github.token }}
-        run: shipyard execute -i work.json
+        run: shipyard execute -i /tmp/work.json
 
       - name: Push branch and open pull request
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
-        run: shipyard publish-execution --branch "$SHIPYARD_BRANCH" --base-branch "$SHIPYARD_EPIC_BRANCH" -i work.json
+        run: shipyard publish-execution --branch "$SHIPYARD_BRANCH" --base-branch "$SHIPYARD_EPIC_BRANCH" -i /tmp/work.json
 
   update-docs:
     name: Update documentation
