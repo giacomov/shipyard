@@ -3,6 +3,7 @@
 
 import asyncio
 import os
+from datetime import UTC, datetime
 
 import click
 from claude_agent_sdk import ClaudeAgentOptions
@@ -54,13 +55,15 @@ async def run_plan_agent(
 
 
 def _ensure_header(plan_path: str, issue_number: str) -> None:
-    """Prepend the HTML comment header if the agent omitted it."""
+    """Write (or replace) the HTML comment header, always with a fresh timestamp."""
     with open(plan_path) as f:
         content = f.read()
-    header = f"<!-- Related to: #{issue_number} -->"
-    if not content.startswith(header):
-        with open(plan_path, "w") as f:
-            f.write(header + "\n\n" + content)
+    timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
+    header = f"<!-- Related to: #{issue_number} | Generated: {timestamp} -->"
+    if content.startswith("<!-- Related to:"):
+        content = content.split("\n", 1)[1].lstrip("\n")
+    with open(plan_path, "w") as f:
+        f.write(header + "\n\n" + content)
 
 
 @click.command()
