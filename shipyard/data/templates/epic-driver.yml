@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      issues: read
+      issues: write
       pull-requests: read
     outputs:
       has_work: ${{ steps.find-work.outputs.has_work }}
@@ -29,6 +29,19 @@ jobs:
 
       - name: Install shipyard
         run: uv tool install "git+https://github.com/giacomov/shipyard@SHIPYARD_VERSION"
+
+      - name: Close completed issues
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          printf '%s' "$PR_BODY" | grep -oiE '(closes|fixes|resolves) #[0-9]+' \
+            | grep -oE '[0-9]+' \
+            | while read -r issue_num; do
+                gh issue close "$issue_num" --repo "$GITHUB_REPOSITORY" || true
+              done
 
       - name: Find epic and unblocked issues
         id: find-work
