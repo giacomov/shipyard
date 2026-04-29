@@ -85,7 +85,7 @@ def test_fetch_issue_context() -> None:
 def test_extract_issue_from_pr_review_found() -> None:
     event_json: dict[str, Any] = {"pull_request": {"body": "Fixes #123"}}
 
-    result = extract_issue_from_pr_review(event_json, "owner/repo")
+    result = extract_issue_from_pr_review(event_json)
 
     assert result == 123
 
@@ -94,7 +94,7 @@ def test_extract_issue_from_pr_review_not_found() -> None:
     event_json: dict[str, Any] = {"pull_request": {"body": "No references"}}
 
     with pytest.raises(ValueError):
-        extract_issue_from_pr_review(event_json, "owner/repo")
+        extract_issue_from_pr_review(event_json)
 
 
 # ---------------------------------------------------------------------------

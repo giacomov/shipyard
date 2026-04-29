@@ -36,7 +36,7 @@ def resolve_epic_number(
     repo_name: str,
 ) -> int | None:
     """Return the epic issue number based on the trigger event."""
-    if event in ("issues", "workflow_dispatch"):
+    if event in ("issues", "workflow_dispatch", "issue_comment"):
         return issue_number
 
     if event == "pull_request":
@@ -151,8 +151,10 @@ def find_work() -> None:
     owner, repo_name = repo.split("/", 1)
     issue_number = int(issue_num_str) if issue_num_str.strip() else None
 
-    if event in ("issues", "workflow_dispatch") and not issue_num_str.strip():
-        raise click.ClickException("ISSUE_NUMBER is required for issues/workflow_dispatch events.")
+    if event in ("issues", "workflow_dispatch", "issue_comment") and not issue_num_str.strip():
+        raise click.ClickException(
+            "ISSUE_NUMBER is required for issues/workflow_dispatch/issue_comment events."
+        )
 
     epic_number = resolve_epic_number(event, issue_number, pr_body, owner, repo_name)
     if epic_number is None:

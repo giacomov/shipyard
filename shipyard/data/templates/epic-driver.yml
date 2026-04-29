@@ -1,27 +1,19 @@
 name: Epic Driver
 
 on:
-  issues:
-    types: [labeled]
+  issue_comment:
+    types: [created]
   pull_request:
     types: [closed]
-  workflow_dispatch:
-    inputs:
-      issue_number:
-        description: "Epic issue number to drive"
-        required: true
-        type: string
 
 jobs:
   find-work:
     name: Find unblocked issues
     if: |
-      (github.event_name == 'issues' &&
-       github.event.label.name == 'in-progress' &&
-       github.event.issue.pull_request == '') ||
+      (startsWith(github.event.comment.body, '/ship run') &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
       (github.event_name == 'pull_request' &&
-       github.event.pull_request.merged == true) ||
-      github.event_name == 'workflow_dispatch'
+       github.event.pull_request.merged == true)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -43,7 +35,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           EVENT_NAME: ${{ github.event_name }}
-          ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number || '' }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || '' }}
           PR_BODY: ${{ github.event.pull_request.body || '' }}
         run: shipyard find-work
 
@@ -132,12 +124,14 @@ jobs:
 
       - name: Check out epic branch and compute base SHA
         run: |
-          EPIC_BRANCH="${{ github.event.pull_request.head.ref }}"
-          git fetch origin "$EPIC_BRANCH"
+          EPIC_BRANCH="${{ github.event.pull_request.base.ref }}"
+          DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
+          git fetch origin "$EPIC_BRANCH" "$DEFAULT_BRANCH"
           git checkout "$EPIC_BRANCH"
-          BASE_SHA=$(git merge-base "origin/${{ github.event.pull_request.base.ref }}" HEAD)
+          BASE_SHA=$(git merge-base "origin/$DEFAULT_BRANCH" HEAD)
           echo "BASE_SHA=$BASE_SHA" >> "$GITHUB_ENV"
           echo "EPIC_BRANCH=$EPIC_BRANCH" >> "$GITHUB_ENV"
+          echo "DEFAULT_BRANCH=$DEFAULT_BRANCH" >> "$GITHUB_ENV"
 
       - name: Run documentation agent
         env:
@@ -145,21 +139,22 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: shipyard update-docs --base-sha "$BASE_SHA"
 
-      - name: Push documentation changes
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: git push origin "$EPIC_BRANCH"
+      - name: Commit and push documentation changes
+        run: |
+          git add -A
+          git diff --cached --quiet || git commit -m "docs: update documentation for epic $EPIC_BRANCH"
+          git push origin "$EPIC_BRANCH"
 
-      - name: Open documentation PR
+      - name: Open epic pull request
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
-          EPIC_NUMBER=$(echo "$BASE_BRANCH" | sed 's|shipyard/epic-||')
+          EPIC_NUMBER=$(echo "$EPIC_BRANCH" | sed 's|shipyard/epic-||')
           EPIC_TITLE=$(gh issue view "$EPIC_NUMBER" --repo "${{ github.repository }}" --json title --jq '.title')
           gh pr create \
             --repo "${{ github.repository }}" \
             --head "$EPIC_BRANCH" \
-            --base "$BASE_BRANCH" \
-            --title "docs: update documentation for epic #${EPIC_NUMBER}: ${EPIC_TITLE}" \
-            --body "Shipyard has updated in-repo documentation to reflect the changes made in this epic. Please review before merging."
+            --base "$DEFAULT_BRANCH" \
+            --title "feat: epic #${EPIC_NUMBER}: ${EPIC_TITLE}" \
+            --body "All tasks for epic #${EPIC_NUMBER} are complete. Closes #${EPIC_NUMBER}." \
+          || echo "PR already exists for $EPIC_BRANCH"

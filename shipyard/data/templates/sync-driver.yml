@@ -9,7 +9,8 @@ jobs:
     name: Sync plan to GitHub Issues
     if: |
       github.event.pull_request.merged == true &&
-      contains(github.event.pull_request.labels.*.name, 'plan')
+      (startsWith(github.event.pull_request.head.ref, 'shipyard-plan/') ||
+       startsWith(github.event.pull_request.head.ref, 'plan/'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -30,7 +31,11 @@ jobs:
         id: extract
         run: |
           BRANCH="${{ github.event.pull_request.head.ref }}"
-          ISSUE=$(echo "$BRANCH" | sed 's|plan/i||')
+          if [[ "$BRANCH" == shipyard-plan/* ]]; then
+            ISSUE=$(echo "$BRANCH" | sed 's|shipyard-plan/i||')
+          else
+            ISSUE=$(echo "$BRANCH" | sed 's|plan/i||')
+          fi
           echo "issue_number=${ISSUE}" >> "$GITHUB_OUTPUT"
 
       - name: Generate tasks.json from plan
