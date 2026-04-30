@@ -7,7 +7,6 @@ import os
 import click
 
 from shipyard.schemas import Subtask, SubtaskList
-from shipyard.settings import settings
 from shipyard.utils.gh import gh, parse_closing_references
 from shipyard.utils.gh import set_github_output as set_output
 
@@ -51,10 +50,7 @@ def resolve_epic_number(
         query($owner: String!, $repo: String!, $number: Int!) {
             repository(owner: $owner, name: $repo) {
                 issue(number: $number) {
-                    parent {
-                        number
-                        labels(first: 20) { nodes { name } }
-                    }
+                    parent { number }
                 }
             }
         }
@@ -64,15 +60,13 @@ def resolve_epic_number(
                 data = gh_graphql(parent_query, {"owner": owner, "repo": repo_name, "number": n})
                 parent = data["repository"]["issue"].get("parent")
                 if parent:
-                    label_names = [lbl["name"] for lbl in parent["labels"]["nodes"]]
-                    if settings.epic_status_label in label_names:
-                        print(f"Found epic #{parent['number']} via GraphQL parent of #{n}.")
-                        return parent["number"]
+                    print(f"Found epic #{parent['number']} via GraphQL parent of #{n}.")
+                    return parent["number"]
             except RuntimeError as e:
                 print(f"GraphQL parent lookup failed for #{n}: {e}")
 
-        # Fallback: scan open in-progress issues
-        print("GraphQL parent lookup found nothing — falling back to label search.")
+        # Fallback: scan open issues for one whose sub-issues include the closed issue
+        print("GraphQL parent lookup found nothing — falling back to sub-issue scan.")
         repo = f"{owner}/{repo_name}"
         candidates = json.loads(
             gh(
@@ -83,8 +77,6 @@ def resolve_epic_number(
                     repo,
                     "--state",
                     "open",
-                    "--label",
-                    settings.epic_status_label,
                     "--json",
                     "number",
                     "--limit",
@@ -93,13 +85,13 @@ def resolve_epic_number(
             )
         )
         for candidate in candidates:
-            subs = gh_get(f"repos/{repo}/issues/{candidate['number']}/sub_issues")
+            subs = gh_get(f"repos/{repo}/issues/{candidate['number']}/sub_issues?state=all")
             sub_numbers = [s["number"] for s in subs]
             if any(n in sub_numbers for n in closed_numbers):
                 print(f"Found epic #{candidate['number']} via sub-issue membership.")
                 return candidate["number"]
 
-        print("Could not find an in-progress epic for this PR — nothing to do.")
+        print("Could not find an active epic for this PR — nothing to do.")
         return None
 
     raise RuntimeError(f"Unknown EVENT_NAME: {event!r}")

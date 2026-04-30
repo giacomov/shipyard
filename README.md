@@ -21,8 +21,8 @@ gh secret set CLAUDE_CODE_OAUTH_TOKEN --body "<your-token>"
 shipyard tasks -i my-plan.md -t "My Feature" -o tasks.json
 shipyard sync -i tasks.json
 
-# Label the epic issue "in-progress" to start the pipeline
-gh issue edit <epic-number> --add-label in-progress
+# Trigger the pipeline on the epic issue
+gh workflow run epic-driver.yml -f issue_number=<epic-number>
 ```
 
 ## Key features

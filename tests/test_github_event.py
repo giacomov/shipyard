@@ -20,16 +20,6 @@ from shipyard.utils.github_event import (
 # ---------------------------------------------------------------------------
 
 
-def test_parse_github_event_issues_labeled(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("GITHUB_REPOSITORY", "owner/repo")
-    event_json: dict[str, Any] = {"issue": {"number": 42}, "label": {"name": "plan"}}
-
-    issue_number, repo = parse_github_event(event_json)
-
-    assert issue_number == 42
-    assert repo == "owner/repo"
-
-
 def test_parse_github_event_pr_review(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GITHUB_REPOSITORY", "owner/repo")
     event_json: dict[str, Any] = {
@@ -95,75 +85,6 @@ def test_extract_issue_from_pr_review_not_found() -> None:
 
     with pytest.raises(ValueError):
         extract_issue_from_pr_review(event_json)
-
-
-# ---------------------------------------------------------------------------
-# extract_github_event CLI — issues.labeled
-# ---------------------------------------------------------------------------
-
-
-def test_extract_github_event_issues_labeled(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    event_json: dict[str, Any] = {
-        "issue": {"number": 10, "title": "My Epic", "body": "Do the work"},
-        "label": {"name": "plan"},
-    }
-    event_file = tmp_path / "event.json"
-    event_file.write_text(json.dumps(event_json))
-
-    github_output_file = tmp_path / "github_output.txt"
-    github_output_file.write_text("")
-
-    monkeypatch.setenv("GITHUB_EVENT_PATH", str(event_file))
-    monkeypatch.setenv("GITHUB_REPOSITORY", "owner/repo")
-    monkeypatch.setenv("GITHUB_OUTPUT", str(github_output_file))
-
-    runner = CliRunner()
-    with runner.isolated_filesystem():
-        result = runner.invoke(
-            extract_github_event,
-            env={
-                "GITHUB_EVENT_PATH": str(event_file),
-                "GITHUB_REPOSITORY": "owner/repo",
-                "GITHUB_OUTPUT": str(github_output_file),
-            },
-        )
-
-    assert result.exit_code == 0, result.output
-    output_text = github_output_file.read_text()
-    assert "issue_number" in output_text
-    assert "10" in output_text
-
-
-def test_extract_github_event_issues_labeled_writes_prompt_txt(
-    tmp_path: Path,
-) -> None:
-    event_json: dict[str, Any] = {
-        "issue": {"number": 10, "title": "My Epic", "body": "Do the work"},
-        "label": {"name": "plan"},
-    }
-    event_file = tmp_path / "event.json"
-    event_file.write_text(json.dumps(event_json))
-
-    github_output_file = tmp_path / "github_output.txt"
-    github_output_file.write_text("")
-
-    env_vars: dict[str, str] = {
-        "GITHUB_EVENT_PATH": str(event_file),
-        "GITHUB_REPOSITORY": "owner/repo",
-        "GITHUB_OUTPUT": str(github_output_file),
-    }
-
-    runner = CliRunner()
-    with runner.isolated_filesystem() as isolated_dir:
-        result = runner.invoke(extract_github_event, env=env_vars)
-        prompt_path = Path(isolated_dir) / "prompt.txt"
-        assert result.exit_code == 0, result.output
-        assert prompt_path.exists(), "prompt.txt was not written"
-        prompt_text = prompt_path.read_text()
-        assert "My Epic" in prompt_text
-        assert "Do the work" in prompt_text
 
 
 # ---------------------------------------------------------------------------

@@ -177,7 +177,7 @@ shipyard sync -i tasks.json
 ```
 
 Creates:
-- Epic issue #10: "Sample Feature Implementation Plan" with `in-progress` label
+- Epic issue #10: "Sample Feature Implementation Plan"
 - Sub-issue #11: "Setup"
 - Sub-issue #12: "Implementation" — blocked by #11
 

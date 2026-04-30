@@ -19,7 +19,6 @@ def parse_github_event(event_json: dict[str, Any]) -> tuple[int, str]:
     - issue_number: from event_json["issue"]["number"] for issues events,
                     or derived from PR body for pull_request_review events
     - repo: from os.environ["GITHUB_REPOSITORY"]
-    For issues.labeled events: event_json["issue"]["number"]
     For pull_request_review events: parse PR body via _parse_closing_references,
       return first result
     Raises ValueError if cannot determine issue number.
@@ -177,18 +176,6 @@ def extract_github_event() -> None:
             _set_github_output("issue_title", issue_title)
             _set_github_output("has_review", "false")
 
-    elif "issue" in event_json and event_json.get("label", {}).get("name") == "plan":
-        issue_number = event_json["issue"]["number"]
-        issue_title = event_json["issue"]["title"]
-        issue_body = event_json["issue"].get("body") or ""
-
-        with open("prompt.txt", "w") as f:
-            f.write(f"Issue #{issue_number}: {issue_title}\n\n{issue_body}")
-
-        _set_github_output("issue_number", str(issue_number))
-        _set_github_output("issue_title", issue_title)
-        _set_github_output("has_review", "false")
-
     elif "review" in event_json and event_json["review"]["state"].upper() == "CHANGES_REQUESTED":
         review_body: str = event_json["review"].get("body") or ""
         pr_number = event_json["pull_request"]["number"]
@@ -255,7 +242,7 @@ def extract_github_event() -> None:
     else:
         issue_num_str = os.environ.get("ISSUE_NUMBER", "").strip()
         if not issue_num_str:
-            click.echo("Error: unrecognised event type or label — nothing to do.", err=True)
+            click.echo("Error: unrecognised event type — nothing to do.", err=True)
             sys.exit(1)
         issue_number = int(issue_num_str)
         context = fetch_issue_context(repo, issue_number)

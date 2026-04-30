@@ -1,8 +1,8 @@
 name: Plan Driver
 
 on:
-  issues:
-    types: [labeled]
+  issue_comment:
+    types: [created]
   pull_request_review:
     types: [submitted]
 
@@ -14,7 +14,10 @@ jobs:
   plan:
     name: Generate or update implementation plan
     if: |
-      (github.event_name == 'issues' && github.event.label.name == 'plan') ||
+      (github.event_name == 'issue_comment' &&
+       (startsWith(github.event.comment.body, '/ship plan') ||
+        startsWith(github.event.comment.body, '/ship replan')) &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
       (github.event_name == 'pull_request_review' && github.event.review.state == 'CHANGES_REQUESTED')
     runs-on: ubuntu-latest
     permissions:
@@ -39,6 +42,7 @@ jobs:
           GITHUB_EVENT_PATH: ${{ github.event_path }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
         run: shipyard extract-github-event
 
       - name: Configure git identity
@@ -106,13 +110,10 @@ jobs:
             git commit -m "docs: add implementation plan for issue #${ISSUE}"
             git push -u origin "$BRANCH"
             if ! gh pr view "$BRANCH" --repo "${{ github.repository }}" --json state --jq 'select(.state=="OPEN")' 2>/dev/null | grep -q OPEN; then
-              gh label create plan --color "0052cc" --description "Implementation plan" \
-                --repo "${{ github.repository }}" 2>/dev/null || true
               PR_URL=$(gh pr create \
                 --base main --head "$BRANCH" \
                 --title "Plan: ${TITLE}" \
                 --body "Closes #${ISSUE}" \
-                --label plan \
                 --repo "${{ github.repository }}")
               gh issue comment "${ISSUE}" \
                 --repo "${{ github.repository }}" \

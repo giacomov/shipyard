@@ -8,7 +8,6 @@ from shipyard.commands.sync import (
     add_blocked_by,
     add_sub_issue,
     create_issue,
-    ensure_label_exists,
     gh,
     resolve_repo,
     run_sync,
@@ -195,29 +194,6 @@ def test_add_blocked_by_sim_mode(monkeypatch, capsys):
 
 
 # ---------------------------------------------------------------------------
-# ensure_label_exists
-# ---------------------------------------------------------------------------
-
-
-@patch("shipyard.commands.sync.gh")
-def test_ensure_label_exists_skips_create_if_present(mock_gh):
-    mock_gh.return_value = "in-progress\nbug"
-    ensure_label_exists("owner/repo", "in-progress", "0075ca", "desc")
-    # Only one call (the list) — no create call
-    assert mock_gh.call_count == 1
-
-
-@patch("shipyard.commands.sync.gh")
-def test_ensure_label_exists_creates_if_absent(mock_gh):
-    mock_gh.return_value = "bug\nenhancement"
-    ensure_label_exists("owner/repo", "in-progress", "0075ca", "desc")
-    assert mock_gh.call_count == 2
-    create_args = mock_gh.call_args_list[1][0][0]
-    assert "label" in create_args
-    assert "create" in create_args
-
-
-# ---------------------------------------------------------------------------
 # task_body
 # ---------------------------------------------------------------------------
 
@@ -309,7 +285,7 @@ def _minimal_plan(*, with_deps: bool = False) -> SubtaskList:
 def test_run_sync_sim_mode_succeeds(monkeypatch, capsys):
     monkeypatch.setenv("SHIPYARD_SIM_MODE", "true")
     with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0, stdout="existing-label\n", stderr="")
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
         code = run_sync(_minimal_plan(), "owner/repo")
     assert code == 0
     out = capsys.readouterr().out
@@ -319,7 +295,7 @@ def test_run_sync_sim_mode_succeeds(monkeypatch, capsys):
 def test_run_sync_sim_mode_with_dependencies(monkeypatch, capsys):
     monkeypatch.setenv("SHIPYARD_SIM_MODE", "true")
     with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0, stdout="existing-label\n", stderr="")
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
         code = run_sync(_minimal_plan(with_deps=True), "owner/repo")
     assert code == 0
     out = capsys.readouterr().out
@@ -357,7 +333,7 @@ def test_sync_cli_sim_mode_from_stdin(monkeypatch):
     monkeypatch.setenv("SHIPYARD_SIM_MODE", "true")
     runner = CliRunner()
     with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0, stdout="existing-label\n", stderr="")
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
         result = runner.invoke(sync, ["--repo", "owner/repo"], input=_minimal_plan_json())
     assert result.exit_code == 0
 

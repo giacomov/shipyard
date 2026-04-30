@@ -15,8 +15,6 @@ _MUTATING_GH_VERBS: set[tuple[str, str]] = {
     ("issue", "comment"),
     ("issue", "edit"),
     ("pr", "create"),
-    ("label", "create"),
-    ("label", "edit"),
 }
 
 _MUTATING_API_METHODS = {"POST", "PATCH", "DELETE", "PUT"}

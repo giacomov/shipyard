@@ -52,5 +52,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
-          shipyard sync -i tasks.json --no-in-progress-label \
+          shipyard sync -i tasks.json \
             --repo "${{ github.repository }}"

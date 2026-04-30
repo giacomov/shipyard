@@ -87,7 +87,7 @@ Exits non-zero if the agent subprocess fails.
 
 Sync task JSON to GitHub Issues.
 
-**Purpose:** Creates the epic issue, one sub-issue per task, links them via the GitHub sub-issues API, wires `blocked-by` dependency edges, and applies the `in-progress` label to the epic.
+**Purpose:** Creates the epic issue, one sub-issue per task, links them via the GitHub sub-issues API, and wires `blocked-by` dependency edges.
 
 **Flags:**
 
@@ -95,8 +95,6 @@ Sync task JSON to GitHub Issues.
 |------|-------------|
 | `-i`, `--input FILE` | Input `tasks.json` (default: stdin) |
 | `--repo OWNER/REPO` | Target repository (default: auto-detected via `gh repo view`) |
-| `--dry-run` | Print all planned API calls without executing them |
-| `--no-in-progress-label` | Skip adding the `in-progress` label to the epic issue |
 
 **Inputs:** The JSON produced by `shipyard tasks`.
 
@@ -256,7 +254,7 @@ Push the implementation branch and open a pull request.
 
 Parse a GitHub Actions event and write structured outputs for use in subsequent workflow steps.
 
-**Purpose:** Reads the event JSON at `$GITHUB_EVENT_PATH`, determines the trigger type (issue labeled `plan`, or pull request review with `CHANGES_REQUESTED`), fetches any needed issue/PR context via `gh`, and writes structured outputs to `$GITHUB_OUTPUT`. Also writes `prompt.txt` (and optionally `review-feedback.txt`) for `shipyard plan`. Called by the `plan` job in `plan-driver.yml`.
+**Purpose:** Reads the event JSON at `$GITHUB_EVENT_PATH`, determines the trigger type (issue comment with `/ship plan`/`/ship replan`, or pull request review with `CHANGES_REQUESTED`), fetches any needed issue/PR context via `gh`, and writes structured outputs to `$GITHUB_OUTPUT`. Also writes `prompt.txt` (and optionally `review-feedback.txt`) for `shipyard plan`. Called by the `plan` job in `plan-driver.yml`.
 
 **Configuration:** Entirely via environment variables (set by the workflow):
 
@@ -269,8 +267,8 @@ Parse a GitHub Actions event and write structured outputs for use in subsequent 
 
 | Key | Populated when |
 |-----|----------------|
-| `issue_number` | Issue labeled `plan`, or re-plan of a plan PR |
-| `issue_title` | Issue labeled `plan`, or re-plan of a plan PR |
+| `issue_number` | `/ship plan` comment on issue, or re-plan of a plan PR |
+| `issue_title` | `/ship plan` comment on issue, or re-plan of a plan PR |
 | `has_review` | Always (`"true"` or `"false"`) |
 | `pr_number` | Review event only |
 | `branch_name` | Review event only |

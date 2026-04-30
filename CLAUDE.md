@@ -72,9 +72,9 @@ Shipyard is a CLI tool + bundled GitHub Actions workflow that turns a markdown i
 
 **Local phase (developer machine):**
 1. `shipyard tasks` parses a markdown plan (`### Task N:` blocks with `**Depends on:**` lines) into `tasks.json`.
-2. `shipyard sync` creates GitHub Issues from that JSON: one epic issue, one sub-issue per task, sub-issue links, `blocked-by` dependency edges, and the `in-progress` label on the epic. Also creates and pushes the `shipyard/epic-<N>` branch used as the base for implementation PRs.
+2. `shipyard sync` creates GitHub Issues from that JSON: one epic issue, one sub-issue per task, sub-issue links, and `blocked-by` dependency edges. Also creates and pushes the `shipyard/epic-<N>` branch used as the base for implementation PRs.
 
-**CI phase (GitHub Actions, triggered by label/PR/dispatch):**
+**CI phase (GitHub Actions, triggered by PR merge or manual dispatch):**
 1. `find-work` job: `shipyard find-work` reads event context from env vars, resolves the active epic, fetches open sub-issues, filters to those with no open blockers, and writes a `work_json` payload to `$GITHUB_OUTPUT`.
 2. `execute` job (three steps):
    - Creates the feature branch (`shipyard/epic-<N>-run-<RUN_ID>`).

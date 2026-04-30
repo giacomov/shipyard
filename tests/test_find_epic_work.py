@@ -135,46 +135,13 @@ def test_resolve_epic_pr_no_closing_references_returns_none(capsys):
 
 @patch("shipyard.commands.find_work.gh_graphql")
 def test_resolve_epic_pr_event_graphql_path(mock_gql):
-    mock_gql.return_value = {
-        "repository": {
-            "issue": {
-                "parent": {
-                    "number": 10,
-                    "labels": {"nodes": [{"name": "in-progress"}]},
-                }
-            }
-        }
-    }
+    mock_gql.return_value = {"repository": {"issue": {"parent": {"number": 10}}}}
     result = resolve_epic_number("pull_request", None, "Closes #5", "owner", "repo")
     assert result == 10
 
 
 @patch("shipyard.commands.find_work.gh_graphql")
-def test_resolve_epic_pr_parent_not_in_progress_skips(mock_gql):
-    # Parent exists but doesn't have the 'in-progress' label → should not return it
-    mock_gql.return_value = {
-        "repository": {
-            "issue": {
-                "parent": {
-                    "number": 10,
-                    "labels": {"nodes": [{"name": "bug"}]},
-                }
-            }
-        }
-    }
-    # No fallback candidates either
-    with (
-        patch("shipyard.commands.find_work.gh") as mock_gh,
-        patch("shipyard.commands.find_work.gh_get") as mock_get,
-    ):
-        mock_gh.return_value = "[]"
-        mock_get.return_value = []
-        result = resolve_epic_number("pull_request", None, "Closes #5", "owner", "repo")
-    assert result is None
-
-
-@patch("shipyard.commands.find_work.gh_graphql")
-def test_resolve_epic_pr_no_parent_falls_back_to_label_search(mock_gql):
+def test_resolve_epic_pr_no_parent_falls_back_to_scan(mock_gql):
     # GraphQL returns no parent
     mock_gql.return_value = {"repository": {"issue": {"parent": None}}}
     candidates = [{"number": 99}]

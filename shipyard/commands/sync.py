@@ -11,7 +11,6 @@ import click
 import pydantic
 
 from shipyard.schemas import Subtask, SubtaskList
-from shipyard.settings import settings
 from shipyard.utils.gh import gh, resolve_repo
 from shipyard.utils.git import checkout_new_branch, push
 
@@ -87,35 +86,6 @@ def add_blocked_by(
             raise
 
 
-def ensure_label_exists(repo: str, name: str, color: str, description: str) -> None:
-    """Create label if it does not already exist."""
-    existing = gh(["label", "list", "--repo", repo, "--json", "name", "--jq", ".[].name"])
-    if name in existing.splitlines():
-        return
-    gh(["label", "create", name, "--repo", repo, "--color", color, "--description", description])
-
-
-def add_in_progress_label(repo: str, issue_number: int) -> None:
-    """Ensure 'in-progress' label exists, then apply it to the issue."""
-    ensure_label_exists(
-        repo,
-        settings.epic_status_label,
-        settings.epic_label_color,
-        "Work is actively being driven by the epic driver",
-    )
-    gh(
-        [
-            "issue",
-            "edit",
-            str(issue_number),
-            "--repo",
-            repo,
-            "--add-label",
-            settings.epic_status_label,
-        ],
-    )
-
-
 def task_body(subtask: Subtask) -> str:
     """Format the GitHub issue body for a Subtask."""
     status_emoji = {"pending": "⬜", "in_progress": "🔄", "completed": "✅"}
@@ -141,7 +111,7 @@ def validate(task_list: SubtaskList) -> None:
                 raise ValueError(f'Task {task_id} has unknown dependency "{dep}".')
 
 
-def run_sync(task_list: SubtaskList, repo: str, skip_label: bool = False) -> int:
+def run_sync(task_list: SubtaskList, repo: str) -> int:
     """Main sync logic. Returns exit code (0=success, 1=partial failures)."""
     failures: list[str] = []
     tasks = list(task_list.tasks.values())
@@ -209,17 +179,7 @@ def run_sync(task_list: SubtaskList, repo: str, skip_label: bool = False) -> int
                 print(f"   FAILED: {e}")
                 failures.append(f"blocked-by for {blocked_id}→{blocking_id}: {e}")
 
-    # 5. Add in-progress label to epic
-    if not skip_label:
-        print("\n── Marking epic as in-progress")
-        try:
-            add_in_progress_label(repo, parent.number)
-            print(f'   → added "in-progress" label to #{parent.number}')
-        except RuntimeError as e:
-            print(f"   WARNING: could not add in-progress label: {e}")
-            failures.append(f"add in-progress label: {e}")
-
-    # 6. Create and push epic branch
+    # 5. Create and push epic branch
     epic_branch = f"shipyard/epic-{parent.number}"
     click.echo(f"\n── Creating epic branch: {epic_branch}")
     try:
@@ -230,7 +190,7 @@ def run_sync(task_list: SubtaskList, repo: str, skip_label: bool = False) -> int
         click.echo(f"   WARNING: could not create/push epic branch: {e}")
         failures.append(f"create epic branch: {e}")
 
-    # 7. Summary
+    # 6. Summary
     print("\n── Summary")
     print(f"   Epic branch:  {epic_branch}")
     print(f"   Parent issue: https://github.com/{repo}/issues/{parent.number}")
@@ -257,14 +217,7 @@ def run_sync(task_list: SubtaskList, repo: str, skip_label: bool = False) -> int
     help="Input tasks.json (default: stdin)",
 )
 @click.option("--repo", default=None, help="Target repo as owner/repo (default: auto-detect)")
-@click.option(
-    "--no-in-progress-label",
-    "no_in_progress_label",
-    is_flag=True,
-    default=False,
-    help="Skip adding the in-progress label to the epic issue.",
-)
-def sync(input_file: str | None, repo: str | None, no_in_progress_label: bool) -> None:
+def sync(input_file: str | None, repo: str | None) -> None:
     """Sync task JSON to GitHub Issues."""
     if input_file:
         data = json.loads(Path(input_file).read_text())
@@ -282,6 +235,6 @@ def sync(input_file: str | None, repo: str | None, no_in_progress_label: bool) -
         raise click.ClickException(str(e))
 
     resolved_repo = resolve_repo(repo)
-    exit_code = run_sync(task_list, resolved_repo, skip_label=no_in_progress_label)
+    exit_code = run_sync(task_list, resolved_repo)
     if exit_code != 0:
         raise SystemExit(exit_code)

@@ -19,13 +19,6 @@ Shipyard uses GitHub Issues as its persistent task board. This document explains
 4. **Wire blocked-by edges** — `gh api repos/{owner}/{repo}/issues/{blocked}/dependencies/blocked_by --method POST -F issue_id={blocking_db_id}`
    - Soft-fails with a warning if the dependencies API returns 404 (not available on all plans/orgs).
 
-5. **Apply `in-progress` label to the epic** — `gh issue edit {epic} --add-label in-progress`
-   - Creates the label (color `0075ca`) if it does not already exist.
-
-### `in-progress` label convention
-
-The `in-progress` label on the epic issue is the signal that `find-work` uses to identify active epics. Applying this label also triggers the `epic-driver.yml` workflow (via the `issues: labeled` event). Removing it (or closing the epic) stops the automation.
-
 ## How `shipyard find-work` resolves the epic
 
 The resolution strategy depends on `$EVENT_NAME`:
@@ -40,9 +33,9 @@ When a PR is merged, `find-work` needs to determine which epic it belongs to:
 
 1. **Parse closing references** — scan `$PR_BODY` for `closes/fixes/resolves #N` patterns. Collects all referenced issue numbers.
 
-2. **GraphQL parent lookup** — for each referenced issue number, query the GraphQL API for its parent issue. If the parent has the `in-progress` label, that parent is the epic.
+2. **GraphQL parent lookup** — for each referenced issue number, query the GraphQL API for its parent issue. If a parent exists, that parent is the epic.
 
-3. **Fallback: label search** — if GraphQL lookup fails or returns nothing, list all open `in-progress` issues (up to 50) and check each one's sub-issues for a match.
+3. **Fallback: sub-issue scan** — if GraphQL returns no parent, list all open issues (up to 50) and check each one's sub-issues (open and closed) for a match.
 
 If no epic is found, `has_work` is set to `false` and the workflow exits cleanly.
 
@@ -69,7 +62,7 @@ This means: when a PR implementing issue #11 is merged and #11 closes, the next 
 ### For `shipyard sync` (local / CI)
 
 The `gh` CLI must be authenticated with a token that has:
-- `repo` scope (create issues, add labels)
+- `repo` scope (create issues)
 - Access to the sub-issues and dependencies preview APIs (available on GitHub.com for public and private repos)
 
 ### For the `find-work` job

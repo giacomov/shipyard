@@ -1,8 +1,6 @@
 name: Epic Driver
 
 on:
-  issues:
-    types: [labeled]
   pull_request:
     types: [closed]
   workflow_dispatch:
@@ -16,9 +14,6 @@ jobs:
   find-work:
     name: Find unblocked issues
     if: |
-      (github.event_name == 'issues' &&
-       github.event.label.name == 'in-progress' &&
-       github.event.issue.pull_request == '') ||
       (github.event_name == 'pull_request' &&
        github.event.pull_request.merged == true) ||
       github.event_name == 'workflow_dispatch'
@@ -43,7 +38,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           EVENT_NAME: ${{ github.event_name }}
-          ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number || '' }}
+          ISSUE_NUMBER: ${{ inputs.issue_number || '' }}
           PR_BODY: ${{ github.event.pull_request.body || '' }}
         run: shipyard find-work
 

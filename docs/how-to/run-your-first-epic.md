@@ -23,8 +23,8 @@ shipyard init
 ```
 
 This creates three workflow files under `.github/workflows/`:
-- `epic-driver.yml` — runs the agent pipeline when you label an epic `in-progress`
-- `plan-driver.yml` — generates implementation plans from issues
+- `epic-driver.yml` — runs the agent pipeline when a PR merges or on manual dispatch
+- `plan-driver.yml` — generates implementation plans from `/ship plan` comments
 - `sync-driver.yml` — converts merged plan PRs into GitHub Issues
 
 Commit and push these files.
@@ -77,10 +77,10 @@ shipyard sync -i tasks.json
 
 ## 6. Start the pipeline
 
-Label the epic issue `in-progress` to trigger `epic-driver.yml`:
+Trigger `epic-driver.yml` via manual dispatch:
 
 ```bash
-gh issue edit <epic-number> --add-label in-progress
+gh workflow run epic-driver.yml -f issue_number=<epic-number>
 ```
 
 The workflow picks up unblocked sub-issues, runs the three-agent pipeline for each one, and opens a pull request against the epic branch.
@@ -89,8 +89,8 @@ The workflow picks up unblocked sub-issues, runs the three-agent pipeline for ea
 
 Each pipeline run opens a PR titled `shipyard: implement N task(s) from epic #<N>`. Review the diff, request changes if needed, and merge when satisfied.
 
-Merging the PR closes the implemented sub-issues and triggers another `epic-driver.yml` run, which picks up the next unblocked tasks.
+Merging the PR closes the implemented sub-issues and triggers another `epic-driver.yml` run automatically, which picks up the next unblocked tasks.
 
 ## Stopping the pipeline
 
-Remove the `in-progress` label from the epic issue, or close it. The workflow will not trigger again until the label is re-applied or a manual dispatch is run.
+Close the epic issue. Subsequent PR merges will find no active epic and exit cleanly.
