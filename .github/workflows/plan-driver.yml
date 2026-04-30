@@ -3,22 +3,18 @@ name: Plan Driver
 on:
   issue_comment:
     types: [created]
-  pull_request_review:
-    types: [submitted]
 
 concurrency:
-  group: plan-driver-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+  group: plan-driver-${{ github.event.issue.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
   plan:
     name: Generate or update implementation plan
     if: |
-      (github.event_name == 'issue_comment' &&
-       (startsWith(github.event.comment.body, '/ship plan') ||
-        startsWith(github.event.comment.body, '/ship replan')) &&
-       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
-      (github.event_name == 'pull_request_review' && github.event.review.state == 'CHANGES_REQUESTED')
+      (startsWith(github.event.comment.body, '/ship plan') ||
+       startsWith(github.event.comment.body, '/ship replan')) &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -52,21 +48,17 @@ jobs:
 
       - name: Checkout branch
         run: |
-          REVIEW_TARGET="${{ steps.extract-event.outputs.review_target }}"
           ISSUE="${{ steps.extract-event.outputs.issue_number }}"
           git fetch origin
-          if [ "$REVIEW_TARGET" == "implementation" ]; then
-            git checkout "${{ steps.extract-event.outputs.branch_name }}"
-          elif [ "${{ steps.extract-event.outputs.has_review }}" == "true" ]; then
-            git checkout "plan/i${ISSUE}"
-          elif git ls-remote --exit-code origin "plan/i${ISSUE}" > /dev/null 2>&1; then
-            git checkout -b "plan/i${ISSUE}" "origin/plan/i${ISSUE}"
+          if [ "${{ steps.extract-event.outputs.has_review }}" == "true" ]; then
+            git checkout "shipyard-plan/i${ISSUE}"
+          elif git ls-remote --exit-code origin "shipyard-plan/i${ISSUE}" > /dev/null 2>&1; then
+            git checkout -b "shipyard-plan/i${ISSUE}" "origin/shipyard-plan/i${ISSUE}"
           else
-            git checkout -b "plan/i${ISSUE}"
+            git checkout -b "shipyard-plan/i${ISSUE}"
           fi
 
       - name: Generate or update plan
-        if: steps.extract-event.outputs.review_target != 'implementation'
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
@@ -82,25 +74,14 @@ jobs:
             --issue-title "${{ steps.extract-event.outputs.issue_title }}" \
             $EXTRA_ARGS
 
-      - name: Address review feedback
-        if: steps.extract-event.outputs.review_target == 'implementation'
-        env:
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          shipyard execute \
-            --review-feedback-file review-feedback.txt \
-            --prompt-file prompt.txt
-
       - name: Commit and publish plan
-        if: steps.extract-event.outputs.review_target != 'implementation'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           ISSUE="${{ steps.extract-event.outputs.issue_number }}"
           TITLE="${{ steps.extract-event.outputs.issue_title }}"
           HAS_REVIEW="${{ steps.extract-event.outputs.has_review }}"
-          BRANCH="plan/i${ISSUE}"
+          BRANCH="shipyard-plan/i${ISSUE}"
 
           git add "plans/i${ISSUE}.md"
           if [ "$HAS_REVIEW" == "true" ]; then
@@ -120,14 +101,3 @@ jobs:
                 --body "Shipyard has created a plan for this issue: ${PR_URL}"
             fi
           fi
-
-      - name: Push revision and notify
-        if: steps.extract-event.outputs.review_target == 'implementation'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          BRANCH="${{ steps.extract-event.outputs.branch_name }}"
-          git push origin "$BRANCH"
-          gh pr comment ${{ steps.extract-event.outputs.pr_number }} \
-            --repo "${{ github.repository }}" \
-            --body "Shipyard has addressed the review feedback. Please review the latest changes."

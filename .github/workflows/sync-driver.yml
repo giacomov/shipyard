@@ -9,8 +9,8 @@ jobs:
     name: Sync plan to GitHub Issues
     if: |
       github.event.pull_request.merged == true &&
-      (startsWith(github.event.pull_request.head.ref, 'plan/') ||
-       startsWith(github.event.pull_request.head.ref, 'shipyard-plan/'))
+      (startsWith(github.event.pull_request.head.ref, 'shipyard-plan/') ||
+       startsWith(github.event.pull_request.head.ref, 'plan/'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
