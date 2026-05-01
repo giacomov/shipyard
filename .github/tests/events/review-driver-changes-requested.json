@@ -1,0 +1,12 @@
+{
+  "action": "submitted",
+  "review": {
+    "state": "CHANGES_REQUESTED",
+    "body": "Please address the edge cases in the implementation."
+  },
+  "pull_request": {
+    "number": 77,
+    "head": { "ref": "shipyard/epic-42-run-99" },
+    "base": { "ref": "shipyard/epic-42" }
+  }
+}

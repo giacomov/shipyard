@@ -1,0 +1,62 @@
+name: Review Driver
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  revise:
+    name: Address PR review feedback
+    if: |
+      github.event.review.state == 'CHANGES_REQUESTED' &&
+      startsWith(github.event.pull_request.head.ref, 'shipyard/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+
+      - uses: astral-sh/setup-uv@v4
+
+      - name: Install shipyard
+        run: uv tool install "git+https://github.com/giacomov/shipyard@main"
+
+      - name: Extract review context
+        env:
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: shipyard extract-github-event
+
+      - name: Run revision pipeline
+        id: revise
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: shipyard execute --review-feedback-file review-feedback.txt --prompt-file prompt.txt
+
+      - name: Push revised branch
+        if: success()
+        run: git push origin "${{ github.event.pull_request.head.ref }}"
+
+      - name: Post failure comment on PR
+        if: failure() && steps.revise.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR="${{ github.event.pull_request.number }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          gh pr comment "$PR" --repo "${{ github.repository }}" \
+            --body "Shipyard pipeline failed. See the [action run]($RUN_URL) for details."

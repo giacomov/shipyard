@@ -33,12 +33,15 @@ include = ["shipyard*"]
 shipyard = ["py.typed"]
 "shipyard.data.prompts" = ["*.md"]
 "shipyard.data.templates" = ["*.yml"]
-"shipyard.data.skills" = ["*/SKILL.md"]
+"shipyard.data.skills" = ["*/*.md"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "--cov=shipyard --cov-report=term-missing --cov-report=html"
+markers = [
+    "integration: requires Docker and gh act extension",
+]
 
 [tool.coverage.run]
 branch = true
