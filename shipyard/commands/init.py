@@ -18,6 +18,7 @@ _SKILL_NAMES = [
     "shipyard-doc-verifier",
     "shipyard-planner",
     "shipyard-replanner",
+    "shipyard-task-agent",
 ]
 
 
@@ -68,9 +69,13 @@ def init(path: str, force: bool, skip_plan_driver: bool, dev: str | None) -> Non
     epic_dest = workflows_dir / "epic-driver.yml"
     plan_dest = workflows_dir / "plan-driver.yml"
     sync_dest = workflows_dir / "sync-driver.yml"
+    review_dest = workflows_dir / "review-driver.yml"
 
     if epic_dest.exists() and not force:
         raise click.ClickException(f"{epic_dest} already exists. Use --force to overwrite.")
+
+    if review_dest.exists() and not force:
+        raise click.ClickException(f"{review_dest} already exists. Use --force to overwrite.")
 
     if not skip_plan_driver and plan_dest.exists() and not force:
         raise click.ClickException(f"{plan_dest} already exists. Use --force to overwrite.")
@@ -91,11 +96,18 @@ def init(path: str, force: bool, skip_plan_driver: bool, dev: str | None) -> Non
         .read_text(encoding="utf-8")
         .replace("SHIPYARD_VERSION", install_ref)
     )
+    review_content = (
+        (_TEMPLATES / "review-driver.yml")
+        .read_text(encoding="utf-8")
+        .replace("SHIPYARD_VERSION", install_ref)
+    )
 
     click.echo("GitHub Actions workflows:")
     epic_dest.parent.mkdir(parents=True, exist_ok=True)
     epic_dest.write_text(epic_content)
     click.echo(f"  {epic_dest}")
+    review_dest.write_text(review_content)
+    click.echo(f"  {review_dest}")
 
     if not skip_plan_driver:
         plan_content = (

@@ -12,18 +12,22 @@ shipyard --help
 
 Set up the Shipyard workflows in a repository.
 
-**Purpose:** Copies the bundled `epic-driver.yml`, `plan-driver.yml`, and `sync-driver.yml` templates into `.github/workflows/` and substitutes `SHIPYARD_VERSION` with the installed package version (or the given branch when `--dev BRANCH` is set).
+**Purpose:** Copies the bundled `epic-driver.yml`, `review-driver.yml`, `plan-driver.yml`, and `sync-driver.yml` templates into `.github/workflows/` and substitutes `SHIPYARD_VERSION` with the installed package version (or the given branch when `--dev BRANCH` is set).
 
 **Arguments and flags:**
 
 | Name | Type | Description |
 |------|------|-------------|
 | `PATH` | positional argument | Target repository directory (default: `.`) |
-| `--force` | flag | Overwrite existing workflow files |
+| `--force` | flag | Overwrite existing workflow files and skill files |
 | `--skip-plan-driver` | flag | Only install `epic-driver.yml`, skip `plan-driver.yml` and `sync-driver.yml` |
 | `--dev BRANCH` | option | Install shipyard from this branch instead of the pinned version |
 
-**Outputs:** Creates `.github/workflows/epic-driver.yml`, `plan-driver.yml`, and `sync-driver.yml` (the latter two skipped when `--skip-plan-driver` is set) in the target directory.
+**Outputs:**
+
+- `.github/workflows/epic-driver.yml` and `review-driver.yml` — always installed.
+- `.github/workflows/plan-driver.yml` and `sync-driver.yml` — skipped when `--skip-plan-driver` is set.
+- `.claude/skills/shipyard-*/SKILL.md` — agent skill files for the implementer, spec reviewer, code quality reviewer, planner, replanner, doc agent, doc verifier, and task-extraction agent. Edit these files to customize agent behavior.
 
 **Example:**
 
@@ -47,7 +51,11 @@ shipyard init --dev my-feature-branch
 shipyard init --skip-plan-driver
 ```
 
-After running, add `CLAUDE_CODE_OAUTH_TOKEN` as a secret in the target repository's settings.
+After running:
+
+1. Commit the generated files: `git add .github .claude && git commit -m 'chore: add shipyard workflows and agent skills'`
+2. Add `CLAUDE_CODE_OAUTH_TOKEN` as a repository secret.
+3. Enable **"Allow GitHub Actions to create and approve pull requests"** under **Settings → Actions → General → Workflow permissions**.
 
 ---
 
@@ -108,9 +116,6 @@ shipyard sync -i tasks.json
 
 # Sync to a specific repo
 shipyard sync -i tasks.json --repo myorg/myrepo
-
-# Preview without creating issues
-shipyard sync -i tasks.json --dry-run
 ```
 
 Requires `gh` CLI to be authenticated. Exits with code 1 on partial failures (some issues may still have been created).
@@ -170,16 +175,17 @@ shipyard plan \
 
 Find unblocked sub-issues for the current epic.
 
-**Purpose:** Resolves the active epic from the trigger event, queries GitHub for open sub-issues with no open blockers, and writes a JSON payload to `$GITHUB_OUTPUT`. Called by the `find-work` job in `epic-driver.yml`.
+**Purpose:** Resolves the active epic (directly from `--issue-number`, or by parsing closing references in `--pr-body`), queries GitHub for open sub-issues with no open blockers, and writes a JSON payload to `$GITHUB_OUTPUT`. Called by the `find-work` job in `epic-driver.yml`.
 
-**Configuration:** Entirely via environment variables (set by the workflow):
+**Flags:**
 
-| Variable | Description |
-|----------|-------------|
-| `GITHUB_REPOSITORY` | `owner/repo` (set automatically by Actions) |
-| `EVENT_NAME` | `issues`, `pull_request`, or `workflow_dispatch` |
-| `ISSUE_NUMBER` | Epic issue number (required for `issues`/`workflow_dispatch`) |
-| `PR_BODY` | PR body text (used when `EVENT_NAME=pull_request`) |
+| Flag | Description |
+|------|-------------|
+| `--repo OWNER/REPO` | GitHub repository (required) |
+| `--issue-number N` | Epic issue number — direct mode; when provided, `--pr-body` is ignored |
+| `--pr-body TEXT` | PR body text — PR mode; the epic is resolved by parsing closing references |
+
+One of `--issue-number` or `--pr-body` must be provided.
 
 **Outputs (to `$GITHUB_OUTPUT`):**
 
@@ -187,6 +193,7 @@ Find unblocked sub-issues for the current epic.
 |-----|-------|
 | `has_work` | `"true"` or `"false"` |
 | `work_json` | JSON payload for `shipyard execute` (only when `has_work=true`) |
+| `epic_in_progress` | `"true"` or `"false"` — whether an active epic was found |
 
 **Not intended for direct use outside CI.** See [github-integration.md](../explanation/github-integration.md) for epic resolution details.
 
@@ -216,7 +223,6 @@ Run the three-agent pipeline for unblocked issues.
 **Outputs:**
 
 - Writes `shipyard-results.json` with `{ "successful": [<task ids>], "failed": [<task ids>] }`.
-- Posts a comment on each failed issue explaining why it was skipped.
 - Exits non-zero if any issues failed.
 
 Does **not** create a branch, push, or open a PR — that is handled by `shipyard publish-execution`.
@@ -262,6 +268,7 @@ Parse a GitHub Actions event and write structured outputs for use in subsequent 
 |----------|-------------|
 | `GITHUB_EVENT_PATH` | Path to the event JSON (set automatically by Actions) |
 | `GITHUB_REPOSITORY` | `owner/repo` (set automatically by Actions) |
+| `COMMENT_BODY` | Raw comment body (set by the workflow); used to detect `/ship replan` |
 
 **Outputs (to `$GITHUB_OUTPUT`):**
 
@@ -270,9 +277,9 @@ Parse a GitHub Actions event and write structured outputs for use in subsequent 
 | `issue_number` | `/ship plan` comment on issue, or re-plan of a plan PR |
 | `issue_title` | `/ship plan` comment on issue, or re-plan of a plan PR |
 | `has_review` | Always (`"true"` or `"false"`) |
-| `pr_number` | Review event only |
-| `branch_name` | Review event only |
-| `review_target` | Review event only (`"plan"` or `"implementation"`) |
+| `pr_number` | Review event, or `/ship replan` comment on a plan PR |
+| `branch_name` | Implementation PR review event only |
+| `review_target` | Review event, or `/ship replan` comment on a plan PR |
 
 **Side effects:** Writes `prompt.txt` containing the issue/task context for `shipyard plan`. On review events, also writes `review-feedback.txt` combining the review summary and inline comments.
 

@@ -36,19 +36,11 @@ the agent sees — no hand-waving.
 Description...
 ```
 
-### Parsing rules
+### Suggested plan structure
 
-| Element | Rule |
-|---------|------|
-| Plan title | First `# Heading` line in the file |
-| Goal | `**Goal:**` line immediately following it |
-| Task header | `### Task N: Title` where `N` is an integer |
-| Dependencies | `**Depends on:** Task 1, Task 3` (or `(none)`) |
-| Task description | All content in the task block except the header and `**Depends on:**` line |
+`shipyard tasks` uses an AI agent to read the plan file and extract tasks — there is no static regex parser or deterministic line-by-line processing. The structure shown in the example above is a recommended convention that the agent is likely to follow; it is not a strict requirement enforced by parsing rules.
 
-- Task headers inside code fences (` ``` ` or `~~~`) are ignored.
-- Dependency values are extracted by regex: `Task\s+(\d+)` (case-insensitive).
-- Unknown dependency IDs cause a validation error before any JSON is emitted.
+Unknown dependency IDs are caught by `shipyard sync`'s `validate()` function, after `tasks.json` has already been written by `shipyard tasks`.
 
 ## JSON task schema
 
@@ -63,7 +55,7 @@ Output of `shipyard tasks`. This is also the input format for `shipyard sync`.
       "task_id": "string — the task number as a string (e.g. \"1\")",
       "title": "string — task title",
       "description": "string — task description",
-      "status": "string — always \"pending\" from the parser",
+      "status": "string — always \"pending\"",
       "blocked_by": ["string"]
     }
   }
@@ -79,7 +71,7 @@ Output of `shipyard tasks`. This is also the input format for `shipyard sync`.
 
 ## Work JSON schema
 
-Output of `shipyard find-work`. This is the input to `shipyard execute` via `$WORK_JSON`. It uses the same `SubtaskList` / `Subtask` schema as `tasks.json`, with `epic_id` and `task_id` set to stringified GitHub issue numbers.
+Output of `shipyard find-work`. This is the input to `shipyard execute` via `-i FILE`. It uses the same `SubtaskList` / `Subtask` schema as `tasks.json`, with `epic_id` and `task_id` set to stringified GitHub issue numbers.
 
 ```json
 {

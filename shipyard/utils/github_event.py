@@ -13,31 +13,6 @@ from shipyard.utils.gh import parse_closing_references as _parse_closing_referen
 from shipyard.utils.gh import set_github_output as _set_github_output
 
 
-def parse_github_event(event_json: dict[str, Any]) -> tuple[int, str]:
-    """
-    Returns (issue_number, repo).
-    - issue_number: from event_json["issue"]["number"] for issues events,
-                    or derived from PR body for pull_request_review events
-    - repo: from os.environ["GITHUB_REPOSITORY"]
-    For pull_request_review events: parse PR body via _parse_closing_references,
-      return first result
-    Raises ValueError if cannot determine issue number.
-    """
-    repo = os.environ["GITHUB_REPOSITORY"]
-
-    if "issue" in event_json:
-        return event_json["issue"]["number"], repo
-
-    if "review" in event_json:
-        pr_body = event_json.get("pull_request", {}).get("body") or ""
-        refs = _parse_closing_references(pr_body)
-        if not refs:
-            raise ValueError("pull_request_review event: no closing references found in PR body.")
-        return refs[0], repo
-
-    raise ValueError("Cannot determine issue number from event JSON.")
-
-
 def fetch_issue_context(repo: str, issue_number: int) -> dict[str, Any]:
     """
     Returns dict with keys: issue_number, issue_title, issue_body, repo
@@ -159,7 +134,6 @@ def extract_github_event() -> None:
                 )
 
             _set_github_output("has_review", "true")
-            _set_github_output("review_target", "plan")
             _set_github_output("issue_number", str(issue_number))
             _set_github_output("issue_title", context["issue_title"])
             _set_github_output("pr_number", str(pr_number))
@@ -206,8 +180,6 @@ def extract_github_event() -> None:
             with open("prompt.txt", "w") as f:
                 f.write("\n\n---\n\n".join(prompt_parts))
 
-            _set_github_output("review_target", "implementation")
-            _set_github_output("branch_name", branch_name)
             _set_github_output("pr_number", str(pr_number))
             _set_github_output("has_review", "true")
 
@@ -225,7 +197,6 @@ def extract_github_event() -> None:
                     f"Issue #{context['issue_number']}: {context['issue_title']}\n\n{context['issue_body']}"
                 )
 
-            _set_github_output("review_target", "plan")
             _set_github_output("issue_number", str(issue_number))
             _set_github_output("issue_title", context["issue_title"])
             _set_github_output("pr_number", str(pr_number))

@@ -21,8 +21,8 @@ gh secret set CLAUDE_CODE_OAUTH_TOKEN --body "<your-token>"
 shipyard tasks -i my-plan.md -t "My Feature" -o tasks.json
 shipyard sync -i tasks.json
 
-# Trigger the pipeline on the epic issue
-gh workflow run epic-driver.yml -f issue_number=<epic-number>
+# Start the pipeline by commenting on the epic issue
+gh issue comment <epic-number> --body "/ship run"
 ```
 
 ## Key features
@@ -36,7 +36,7 @@ gh workflow run epic-driver.yml -f issue_number=<epic-number>
 ## Links
 
 - [Documentation](docs/README.md)
-- [Architecture](docs/explanation/architecture.md)
+- [Architecture](ARCHITECTURE.md)
 - [CLI reference](docs/reference/cli.md)
 - [How to run your first epic](docs/how-to/run-your-first-epic.md)
 - [Changelog](CHANGELOG.md)

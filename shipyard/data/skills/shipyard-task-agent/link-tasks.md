@@ -12,6 +12,6 @@ When establishing dependencies between tasks you already created.
 ## Examples
 
 Set up task dependencies:
-\`\`\`json
+```json
 {"task_id": "3", "add_blocked_by": ["1", "2"]}
-\`\`\`
+```

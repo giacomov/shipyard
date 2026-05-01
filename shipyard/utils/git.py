@@ -32,26 +32,6 @@ def checkout_new_branch(branch: str) -> None:
     git(["checkout", "-b", branch])
 
 
-def checkout_branch(branch: str) -> None:
-    """Check out an existing branch."""
-    git(["checkout", branch])
-
-
-def fetch(remote: str = "origin") -> None:
-    """Fetch from a remote."""
-    git(["fetch", remote])
-
-
-def add(paths: list[str]) -> None:
-    """Stage files for commit."""
-    git(["add"] + paths)
-
-
-def commit(message: str) -> None:
-    """Create a commit with the given message."""
-    git(["commit", "-m", message])
-
-
 def push(branch: str, remote: str = "origin", set_upstream: bool = False) -> None:
     """Push a branch to a remote."""
     args = ["push"]

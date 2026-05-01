@@ -69,7 +69,7 @@ def test_plan_initial_run_creates_plan_file(tmp_cwd: Any) -> None:
     plan_file = tmp_cwd / "plans" / "i42.md"
     assert plan_file.exists()
     content = plan_file.read_text()
-    assert content.startswith("<!-- Related to: #42 -->")
+    assert content.startswith("<!-- Related to: #42 |")
 
 
 # ---------------------------------------------------------------------------
@@ -140,7 +140,7 @@ def test_plan_file_has_correct_header(tmp_cwd: Any) -> None:
     assert result.exit_code == 0, result.output
     plan_file = tmp_cwd / "plans" / "i42.md"
     content = plan_file.read_text()
-    assert content.startswith("<!-- Related to: #42 -->")
+    assert content.startswith("<!-- Related to: #42 |")
 
 
 # ---------------------------------------------------------------------------
@@ -164,7 +164,7 @@ def test_plan_prepends_header_if_agent_omits_it(tmp_cwd: Any) -> None:
 
     assert result.exit_code == 0, result.output
     content = (tmp_cwd / "plans" / "i42.md").read_text()
-    assert content.startswith("<!-- Related to: #42 -->")
+    assert content.startswith("<!-- Related to: #42 |")
     assert "# Plan Without Header" in content
 
 
@@ -232,6 +232,133 @@ async def test_run_plan_agent_retries_on_missing_file(tmp_cwd: Any) -> None:
 
 # ---------------------------------------------------------------------------
 # 8. test_run_plan_agent_detects_unchanged_file_on_replan
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# 9. test_run_plan_agent_exhausts_retries
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_run_plan_agent_exhausts_retries(tmp_cwd: Any) -> None:
+    from shipyard.commands.plan import run_plan_agent
+
+    plan_path = str(tmp_cwd / "plans" / "i99.md")
+    # Plan file is never written, so _plan_file_changed always returns False.
+
+    mock_client = AsyncMock()
+    mock_client.query = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch("shipyard.commands.plan.get_sdk_client", return_value=mock_client),
+        patch(
+            "shipyard.commands.plan.receive_from_client", new_callable=AsyncMock, return_value=""
+        ),
+    ):
+        with pytest.raises(RuntimeError, match="retries"):
+            await run_plan_agent(
+                prompt="test prompt",
+                cwd=str(tmp_cwd),
+                plan_path=plan_path,
+                original_content=None,
+            )
+
+
+# ---------------------------------------------------------------------------
+# 10. test_plan_cli_with_prompt_file
+# ---------------------------------------------------------------------------
+
+
+def test_plan_cli_with_prompt_file(tmp_cwd: Any) -> None:
+    runner = CliRunner()
+
+    prompt_file = tmp_cwd / "context.txt"
+    prompt_file.write_text("this is the prompt content")
+
+    captured: list[str] = []
+
+    async def mock_agent(prompt: str, cwd: str, plan_path_arg: str, original_content: Any) -> None:
+        captured.append(prompt)
+        os.makedirs(os.path.dirname(plan_path_arg), exist_ok=True)
+        with open(plan_path_arg, "w") as f:
+            f.write("<!-- Related to: #5 -->\n\n# Plan")
+
+    with patch("shipyard.commands.plan.run_plan_agent", new=mock_agent):
+        result = runner.invoke(
+            plan,
+            ["--prompt-file", str(prompt_file), "--issue-number", "5"],
+            catch_exceptions=False,
+        )
+
+    assert result.exit_code == 0, result.output
+    assert len(captured) == 1
+    assert "this is the prompt content" in captured[0]
+
+
+# ---------------------------------------------------------------------------
+# 11. test_plan_cli_replan_no_existing_plan
+# ---------------------------------------------------------------------------
+
+
+def test_plan_cli_replan_no_existing_plan(tmp_cwd: Any) -> None:
+    runner = CliRunner()
+
+    async def mock_agent(prompt: str, cwd: str, plan_path_arg: str, original_content: Any) -> None:
+        os.makedirs(os.path.dirname(plan_path_arg), exist_ok=True)
+        with open(plan_path_arg, "w") as f:
+            f.write("<!-- Related to: #5 -->\n\n# Plan")
+
+    with patch("shipyard.commands.plan.run_plan_agent", new=mock_agent):
+        result = runner.invoke(
+            plan,
+            ["--pr-number", "1", "--prompt", "ctx", "--issue-number", "5"],
+            catch_exceptions=False,
+        )
+
+    assert result.exit_code == 0, result.output
+
+
+# ---------------------------------------------------------------------------
+# 12. test_plan_cli_replan_no_feedback_file
+# ---------------------------------------------------------------------------
+
+
+def test_plan_cli_replan_no_feedback_file(tmp_cwd: Any) -> None:
+    runner = CliRunner()
+
+    existing_plan = tmp_cwd / "existing.md"
+    existing_plan.write_text("# Old Plan\nContent")
+
+    async def mock_agent(prompt: str, cwd: str, plan_path_arg: str, original_content: Any) -> None:
+        os.makedirs(os.path.dirname(plan_path_arg), exist_ok=True)
+        with open(plan_path_arg, "w") as f:
+            f.write("<!-- Related to: #5 -->\n\n# Plan")
+
+    with patch("shipyard.commands.plan.run_plan_agent", new=mock_agent):
+        result = runner.invoke(
+            plan,
+            [
+                "--pr-number",
+                "1",
+                "--prompt",
+                "ctx",
+                "--issue-number",
+                "5",
+                "--existing-plan-path",
+                str(existing_plan),
+                # No --review-feedback-file
+            ],
+            catch_exceptions=False,
+        )
+
+    assert result.exit_code == 0, result.output
+
+
+# ---------------------------------------------------------------------------
+# 13. test_run_plan_agent_detects_unchanged_file_on_replan (original #8)
 # ---------------------------------------------------------------------------
 
 

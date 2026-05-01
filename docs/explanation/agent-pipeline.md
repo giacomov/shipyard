@@ -33,14 +33,13 @@ The implementer, spec reviewer, and code quality reviewer share a single `Claude
 │  │  5. Run tests until they pass   │              │
 │  └────────────────────────────────┘              │
 │                                                   │
-│  Pipeline exception? ──► reset + failure comment  │
+│  Pipeline exception? ──► reset git state          │
 └──────────────────────────────────────────────────┘
 ```
 
 ### Implementer (main agent)
 
-- Receives the issue body as `{TASK_DESCRIPTION}` and a context block as `{CONTEXT}`.
-- Context includes: epic title and list of all tasks in the plan, with the current task marked `[current task]`.
+- Receives a plain interpolated string containing: the current task's ID, title, and description; plus a list of all tasks in the plan with the current one marked `[current task]`. The message is prefixed with an instruction to use the shipyard-implementer skill.
 - Has tools: `Bash`, `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Agent`, `Monitor`.
 - Runs in `dontAsk` permission mode (CI environment, no human approvals).
 - Follows TDD: write failing test → implement → verify passing → commit.
@@ -49,8 +48,7 @@ The implementer, spec reviewer, and code quality reviewer share a single `Claude
 ### Spec reviewer (sub-agent)
 
 - Registered as `spec_reviewer` in `ClaudeAgentOptions.agents`.
-- Receives `{TASK_DESCRIPTION}`, `{CONTEXT}`, and `{BASE_SHA}`.
-- Runs `git diff {BASE_SHA}..HEAD` to identify what changed — reviews only the diff, not pre-existing code.
+- Receives the same task context as the implementer (task ID, title, description, and full plan list), extended with an instruction to run `git diff --stat base_sha..HEAD` and `git diff base_sha..HEAD` and focus the review only on those changes.
 - Checks for missing requirements, over-engineering, and misunderstandings.
 - Tools: `Bash`, `Read`, `Grep`, `Glob`.
 
@@ -58,8 +56,7 @@ The implementer, spec reviewer, and code quality reviewer share a single `Claude
 
 - Registered as `code_quality_reviewer` in `ClaudeAgentOptions.agents`.
 - Invoked by the implementer after the spec reviewer passes.
-- Receives `{TASK_DESCRIPTION}`, `{CONTEXT}`, and `{BASE_SHA}`.
-- Runs `git diff --stat {BASE_SHA}..HEAD` and `git diff {BASE_SHA}..HEAD` — reviews only the diff.
+- Receives the same context as the spec reviewer: task ID, title, description, full plan list, and the instruction to run `git diff --stat base_sha..HEAD` and `git diff base_sha..HEAD`, reviewing only those changes.
 - Reviews type hints, error handling, test quality, architecture, and security.
 - Tools: `Bash`, `Read`, `Grep`, `Glob`.
 
@@ -72,10 +69,7 @@ The implementer is instructed to fix issues raised by either reviewer and re-inv
 When an issue fails (any terminal condition):
 
 1. `git reset --hard base_sha` — all uncommitted and committed changes for that issue are discarded.
-2. A comment is posted on the GitHub Issue with:
-   - An HTML comment tag: `<!-- shipyard-executor: <REASON> -->`
-   - A human-readable summary.
-   - A collapsible `<details>` section containing the relevant agent output.
+2. The workflow posts a comment on the epic issue (normal mode) or the PR (revision mode) with a link to the action run.
 3. Execution continues with the next issue.
 
 The overall `shipyard execute` process exits with code 1 if any issues failed.

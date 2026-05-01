@@ -12,6 +12,6 @@ When removing dependencies between tasks you already created.
 ## Examples
 
 Remove the dependency on "2" from task "3":
-\`\`\`json
+```json
 {"task_id": "3", "remove_blocked_by": ["2"]}
-\`\`\`
+```

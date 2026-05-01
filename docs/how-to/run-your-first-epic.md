@@ -23,7 +23,7 @@ shipyard init
 ```
 
 This creates three workflow files under `.github/workflows/`:
-- `epic-driver.yml` — runs the agent pipeline when a PR merges or on manual dispatch
+- `epic-driver.yml` — runs the agent pipeline when a `/ship run` comment is posted or when a Shipyard implementation PR is merged
 - `plan-driver.yml` — generates implementation plans from `/ship plan` comments
 - `sync-driver.yml` — converts merged plan PRs into GitHub Issues
 
@@ -77,13 +77,15 @@ shipyard sync -i tasks.json
 
 ## 6. Start the pipeline
 
-Trigger `epic-driver.yml` via manual dispatch:
+Post a `/ship run` comment on the epic issue:
 
-```bash
-gh workflow run epic-driver.yml -f issue_number=<epic-number>
+```
+/ship run
 ```
 
-The workflow picks up unblocked sub-issues, runs the three-agent pipeline for each one, and opens a pull request against the epic branch.
+The `epic-driver.yml` workflow detects the comment, picks up unblocked sub-issues, runs the three-agent pipeline for each one, and opens a pull request against the epic branch.
+
+You must be an owner, member, or collaborator of the repository for the comment to trigger the workflow.
 
 ## 7. Review and merge
 

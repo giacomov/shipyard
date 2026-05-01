@@ -1,7 +1,10 @@
-## Your task
+---
+name: shipyard-task-agent
+description: Extracts tasks from a markdown implementation plan. Use when shipyard asks to create tasks from a plan.
+user-invocable: false
+---
 
-Read the implementation plan at {plan_path}, explore the repo if needed, and create tasks with dependencies for it
-using the create_task tool.
+Read the implementation plan at the path provided in the context, explore the repo if needed, and create tasks with dependencies for it using the create_task tool.
 
 ## Requirements
 

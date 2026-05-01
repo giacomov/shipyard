@@ -17,7 +17,7 @@ Shipyard solves the coordination problem in agentic coding: given a multi-task i
 ```
 shipyard/
   cli.py               # Click entry point; wires all commands into the `shipyard` group
-  settings.py          # ShipyardSettings: pr_base_branch and other defaults
+  settings.py          # Settings: SHIPYARD_* env var config with defaults
   commands/
     init.py            # shipyard init — copies workflow templates, substitutes SHIPYARD_VERSION
     tasks.py           # shipyard tasks — runs an AI agent to extract tasks from a markdown plan; writes tasks.json
@@ -28,8 +28,9 @@ shipyard/
     publish.py         # shipyard publish-execution — git push + gh pr create; reads shipyard-results.json
     update_docs.py     # shipyard update-docs — doc agent + verifier loop; CI use only
   data/
-    prompts/           # plain-text prompt templates with {PLACEHOLDER} tokens; loaded via importlib.resources
-    templates/         # epic-driver.yml, plan-driver.yml, sync-driver.yml with SHIPYARD_VERSION placeholder
+    prompts/           # plain-text prompt files loaded via importlib.resources (currently: system-prompt.md)
+    skills/            # agent skill SKILL.md files installed into the target repo by `shipyard init`
+    templates/         # epic-driver.yml, review-driver.yml, plan-driver.yml, sync-driver.yml with SHIPYARD_VERSION placeholder
   schemas/
     subtask.py         # Subtask: task_id, title, description, status, blocked_by
     subtask_list.py    # SubtaskList: epic_id, title, description, tasks dict; shared by tasks.json and work JSON
@@ -37,10 +38,10 @@ shipyard/
     git.py             # git subprocess wrappers: checkout, push, reset, get_head_sha
     gh.py              # gh CLI wrappers: post_issue_comment, create_pull_request, GitHub output helpers
     github_event.py    # extract-github-event command + event parsing helpers
-    agent.py           # ClaudeSDKClient wrapper and AgentDefinition helpers
+    agent.py           # SimSDKClient, get_sdk_client, and receive_from_client helpers
 ```
 
-Key types: `SubtaskList` (the shared schema between `shipyard tasks` output and `shipyard execute` input), `ParsedPlan` (intermediate from the markdown parser), `ClaudeSDKClient` (wraps `claude-agent-sdk` query calls).
+Key types: `SubtaskList` (the shared schema between `shipyard tasks` output and `shipyard execute` input), `ClaudeSDKClient` (wraps `claude-agent-sdk` query calls).
 
 ## Invariants
 
@@ -48,24 +49,24 @@ Key types: `SubtaskList` (the shared schema between `shipyard tasks` output and 
 
 **All GitHub API calls go through the `gh` CLI as subprocesses.** No code in this repo makes direct HTTP calls to api.github.com. The `gh` subprocess boundary is deliberate: it means local auth, org SSO, and API preview flags are handled by `gh`, not by this codebase.
 
-**CI-only commands are not intended for direct use.** `find_work.py`, `execute.py`, `plan.py`, and `publish.py` read all configuration from environment variables; they carry no `--repo`, `--token`, or similar flags. `update_docs.py` takes `--base-sha` as a CLI flag whose value is injected by the workflow from an environment variable. None of these commands are designed for interactive use outside CI.
+**CI-only commands are not intended for direct use.** `execute.py`, `plan.py`, `publish.py`, and `update_docs.py` carry no `--repo`, `--token`, or similar auth/targeting flags — GitHub auth is handled by the `gh` CLI and Claude auth by `CLAUDE_CODE_OAUTH_TOKEN`. (`find_work.py` does accept `--repo` as a required flag, since the workflow passes it explicitly.) All operational parameters are passed as CLI flags by the surrounding workflow steps. None of these commands are designed for interactive use outside CI.
 
 **`shipyard execute` never pushes or opens a PR.** Branch push and PR creation are `shipyard publish-execution`'s responsibility. This separation allows `publish-execution` to run with `if: always()` in the workflow, ensuring partial results are always published even when the pipeline exits non-zero.
 
 **The epic branch is created by `shipyard sync` (local phase), never by CI.** The CI `execute` job creates a run branch off the epic branch, but the epic branch itself (`shipyard/epic-<N>`) must exist before any CI run starts.
 
-**Failure handling always resets to `base_sha`.** When a task fails, `execute.py` runs `git reset --hard base_sha` before moving to the next task. This ensures failed task attempts leave no commits on the branch.
+**Failure handling always resets to `base_sha`.** When a task fails, `execute.py` runs `git reset --hard base_sha` before moving to the next task, and the workflow posts a failure comment on the epic issue or PR. This ensures failed task attempts leave no commits on the branch.
 
 **The `blocked-by` API soft-fails.** If the GitHub dependency API is unavailable (not supported on all plans), `sync.py` logs a warning and continues. Tasks are treated as unblocked in this case — the ordering guarantee depends on the API being available.
 
 ## Cross-cutting concerns
 
-**Error handling:** In the pipeline, any exception during a task's agent run triggers `reset_fn(base_sha)` (default: `git reset --hard`) and `comment_fn(issue_id, reason)` (default: posts a GitHub Issue comment with an HTML tag `<!-- shipyard-executor: REASON -->`). Execution continues to the next task. `shipyard execute` exits 1 if any task failed.
+**Error handling:** In the pipeline, any exception during a task's agent run triggers `reset_fn(base_sha)` to reset git state. The workflow then posts a failure comment on the epic issue (normal mode) or the PR (revision mode) with a link to the action run. Execution continues to the next task. `shipyard execute` exits 1 if any task failed.
 
 **Configuration:** Local commands (`init`, `tasks`, `sync`) use CLI flags. CI commands (`find-work`, `execute`, `plan`, `publish-execution`) use environment variables exclusively — `GITHUB_REPOSITORY`, `EVENT_NAME`, `ISSUE_NUMBER`, `CLAUDE_CODE_OAUTH_TOKEN`, etc. `update-docs` is also CI-only; it reads model/effort settings from environment variables and accepts `--base-sha` as a CLI flag injected by the workflow.
 
 **Authentication:** The `gh` CLI handles all GitHub authentication (personal access token or OIDC). The `CLAUDE_CODE_OAUTH_TOKEN` environment variable authenticates calls to the Claude Code API and is unrelated to GitHub auth.
 
-**Prompt loading:** All agent prompts are plain text files under `shipyard/data/prompts/`. They are loaded at runtime via `importlib.resources`, so they are bundled with the installed package and require no filesystem path configuration.
+**Prompt loading:** The system prompt and task-extraction agent prompts are plain text files under `shipyard/data/prompts/`, loaded via `importlib.resources`. The implementer, spec reviewer, code quality reviewer, planner, replanner, doc agent, and doc verifier are driven by skill files under `shipyard/data/skills/`, which `shipyard init` installs into `.claude/skills/` in the target repository.
 
-**Testability:** `reset_fn` and `comment_fn` in `execute.py` are injectable callbacks (default to no-ops in tests), making the pipeline testable without live git or GitHub state.
+**Testability:** `reset_fn` in `execute.py` is an injectable callback (defaults to a no-op in tests), making the pipeline testable without live git state.

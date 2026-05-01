@@ -5,6 +5,7 @@ import pytest
 from click.testing import CliRunner
 
 from shipyard.commands.sync import (
+    IssueRef,
     add_blocked_by,
     add_sub_issue,
     create_issue,
@@ -198,40 +199,22 @@ def test_add_blocked_by_sim_mode(monkeypatch, capsys):
 # ---------------------------------------------------------------------------
 
 
-def test_task_body_pending():
-    subtask = Subtask(task_id="1", title="X", description="Do X", status="pending")
+def test_task_body_with_description():
+    subtask = Subtask(task_id="1", title="X", description="Do X")
     body = task_body(subtask)
-    assert "⬜" in body
     assert "Do X" in body
 
 
-def test_task_body_in_progress():
-    subtask = Subtask(task_id="1", title="X", description="Doing Y", status="in_progress")
-    assert "🔄" in task_body(subtask)
-
-
-def test_task_body_completed():
-    subtask = Subtask(task_id="1", title="X", description="Done Z", status="completed")
-    assert "✅" in task_body(subtask)
-
-
 def test_task_body_with_deps():
-    subtask = Subtask(
-        task_id="2", title="X", description="Do Y", status="pending", blocked_by={"1", "3"}
-    )
+    subtask = Subtask(task_id="2", title="X", description="Do Y", blocked_by={"1", "3"})
     body = task_body(subtask)
     assert "1, 3" in body
 
 
 def test_task_body_no_description():
-    subtask = Subtask(task_id="1", title="X", description="", status="pending")
+    subtask = Subtask(task_id="1", title="X", description="")
     body = task_body(subtask)
-    assert "pending" in body
-
-
-def test_task_body_unknown_status_defaults_to_pending_emoji():
-    subtask = Subtask(task_id="1", title="X", description="X", status="mystery")
-    assert "⬜" in task_body(subtask)
+    assert body == ""
 
 
 # ---------------------------------------------------------------------------
@@ -306,6 +289,86 @@ def test_run_sync_sim_mode_with_dependencies(monkeypatch, capsys):
 def test_run_sync_parent_creation_failure_returns_1(mock_create, capsys):
     code = run_sync(_minimal_plan(), "owner/repo")
     assert code == 1
+
+
+@patch("shipyard.commands.sync.create_issue")
+@patch("shipyard.commands.sync.push")
+@patch("shipyard.commands.sync.checkout_new_branch")
+def test_run_sync_task_creation_failure(mock_checkout, mock_push, mock_create, capsys):
+    mock_create.side_effect = [
+        IssueRef(number=10, url="https://github.com/o/r/issues/10", database_id=1000),
+        RuntimeError("API error"),
+    ]
+    code = run_sync(_minimal_plan(), "owner/repo")
+    assert code == 1
+    assert "FAILED" in capsys.readouterr().out
+
+
+@patch("shipyard.commands.sync.create_issue")
+@patch("shipyard.commands.sync.add_sub_issue")
+@patch("shipyard.commands.sync.push")
+@patch("shipyard.commands.sync.checkout_new_branch")
+def test_run_sync_sub_issue_link_failure(mock_checkout, mock_push, mock_sub, mock_create, capsys):
+    mock_create.side_effect = [
+        IssueRef(number=10, url="https://github.com/o/r/issues/10", database_id=1000),
+        IssueRef(number=11, url="https://github.com/o/r/issues/11", database_id=1100),
+    ]
+    mock_sub.side_effect = RuntimeError("link error")
+    code = run_sync(_minimal_plan(), "owner/repo")
+    assert code == 1
+    assert "FAILED" in capsys.readouterr().out
+
+
+@patch("shipyard.commands.sync.create_issue")
+@patch("shipyard.commands.sync.add_sub_issue")
+@patch("shipyard.commands.sync.add_blocked_by")
+@patch("shipyard.commands.sync.push")
+@patch("shipyard.commands.sync.checkout_new_branch")
+def test_run_sync_skips_dep_when_task_missing(
+    mock_checkout, mock_push, mock_blocked, mock_sub, mock_create
+):
+    mock_create.side_effect = [
+        IssueRef(number=10, url="https://github.com/o/r/issues/10", database_id=1000),
+        RuntimeError("API error for T1"),
+        IssueRef(number=12, url="https://github.com/o/r/issues/12", database_id=1200),
+    ]
+    run_sync(_minimal_plan(with_deps=True), "owner/repo")
+    mock_blocked.assert_not_called()
+
+
+@patch("shipyard.commands.sync.create_issue")
+@patch("shipyard.commands.sync.add_sub_issue")
+@patch("shipyard.commands.sync.add_blocked_by")
+@patch("shipyard.commands.sync.push")
+@patch("shipyard.commands.sync.checkout_new_branch")
+def test_run_sync_blocked_by_failure(
+    mock_checkout, mock_push, mock_blocked, mock_sub, mock_create, capsys
+):
+    mock_create.side_effect = [
+        IssueRef(number=10, url="https://github.com/o/r/issues/10", database_id=1000),
+        IssueRef(number=11, url="https://github.com/o/r/issues/11", database_id=1100),
+        IssueRef(number=12, url="https://github.com/o/r/issues/12", database_id=1200),
+    ]
+    mock_blocked.side_effect = RuntimeError("deps API down")
+    code = run_sync(_minimal_plan(with_deps=True), "owner/repo")
+    assert code == 1
+    assert "FAILED" in capsys.readouterr().out
+
+
+@patch("shipyard.commands.sync.create_issue")
+@patch("shipyard.commands.sync.add_sub_issue")
+@patch("shipyard.commands.sync.push")
+@patch("shipyard.commands.sync.checkout_new_branch")
+def test_run_sync_epic_branch_push_failure(mock_checkout, mock_push, mock_sub, mock_create, capsys):
+    mock_create.side_effect = [
+        IssueRef(number=10, url="https://github.com/o/r/issues/10", database_id=1000),
+        IssueRef(number=11, url="https://github.com/o/r/issues/11", database_id=1100),
+    ]
+    mock_push.side_effect = RuntimeError("auth failed")
+    code = run_sync(_minimal_plan(), "owner/repo")
+    assert code == 1
+    out = capsys.readouterr().out
+    assert "epic branch" in out.lower() or "auth failed" in out
 
 
 # ---------------------------------------------------------------------------

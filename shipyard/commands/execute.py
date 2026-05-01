@@ -14,7 +14,6 @@ from claude_agent_sdk import AgentDefinition, ClaudeAgentOptions
 from shipyard.schemas import Subtask, SubtaskList
 from shipyard.settings import EffortLevel, settings
 from shipyard.utils.agent import get_sdk_client, receive_from_client
-from shipyard.utils.gh import post_issue_comment, resolve_repo
 from shipyard.utils.git import get_head_sha, reset_hard
 
 _system_prompt = _res_files("shipyard.data.prompts").joinpath("system-prompt.md").read_text()
@@ -24,10 +23,8 @@ async def run_issue_pipeline(
     task: Subtask,
     work: SubtaskList,
     base_sha: str,
-    max_retries: int = 1,
     *,
     reset_fn: Callable[[str], None] = lambda _: None,
-    comment_fn: Callable[[str, int, str], None] = lambda *_: None,
     model: str,
     effort: EffortLevel,
 ) -> bool:
@@ -37,24 +34,13 @@ async def run_issue_pipeline(
     Returns False if the task failed; in that case the git state is reset to base_sha.
     """
     try:
-        return await _run_issue_pipeline_inner(
-            task, work, base_sha, max_retries, model=model, effort=effort
-        )
+        return await _run_issue_pipeline_inner(task, work, base_sha, model=model, effort=effort)
     except Exception as exc:
         click.echo(f"Task {task.task_id} failed: {exc}", err=True)
         try:
             reset_fn(base_sha)
         except Exception as reset_exc:
             click.echo(f"Failed to reset to {base_sha}: {reset_exc}", err=True)
-        try:
-            comment_body = (
-                f"<!-- shipyard-executor: pipeline-failure -->\n"
-                f"Shipyard pipeline failed for task {task.task_id}: {task.title}\n\n"
-                f"<details><summary>Error</summary>\n\n```\n{exc}\n```\n\n</details>"
-            )
-            comment_fn("", int(task.task_id), comment_body)
-        except Exception as comment_exc:
-            click.echo(f"Failed to post failure comment: {comment_exc}", err=True)
         return False
 
 
@@ -62,7 +48,6 @@ async def _run_issue_pipeline_inner(
     task: Subtask,
     work: SubtaskList,
     base_sha: str,
-    max_retries: int = 1,
     *,
     model: str,
     effort: EffortLevel,
@@ -165,7 +150,6 @@ async def run_all_issues(
     work: SubtaskList,
     *,
     reset_fn: Callable[[str], None] = lambda _: None,
-    comment_fn: Callable[[str, int, str], None] = lambda *_: None,
     model: str,
     effort: EffortLevel,
 ) -> dict[str, list[str]]:
@@ -182,9 +166,7 @@ async def run_all_issues(
             task,
             work,
             base_sha,
-            settings.implementer_max_retries,
             reset_fn=reset_fn,
-            comment_fn=comment_fn,
             model=model,
             effort=effort,
         )
@@ -277,13 +259,11 @@ def execute(
     else:
         assert input_file is not None
         work = SubtaskList.model_validate_json(Path(input_file).read_text())
-        repo = resolve_repo()
 
         results = asyncio.run(
             run_all_issues(
                 work,
                 reset_fn=reset_hard,
-                comment_fn=lambda _, n, body: post_issue_comment(repo, n, body),
                 model=settings.execution_model,
                 effort=settings.execution_effort,
             )

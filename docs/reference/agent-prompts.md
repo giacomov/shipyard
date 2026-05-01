@@ -1,107 +1,86 @@
 # Agent prompts reference
 
-Shipyard bundles prompt files under `shipyard/data/prompts/`. They are used at runtime by the CI pipeline.
+Shipyard bundles prompt files under `shipyard/data/prompts/`. These files are loaded at runtime by the CI pipeline via `importlib.resources`.
 
-## Prompt files
+All agents — implementer, spec reviewer, code quality reviewer, planner, replanner, doc agent, doc verifier, and task-extraction agent — are driven by **skill files** installed into `.claude/skills/shipyard-*/SKILL.md` by `shipyard init`. Edit those files to customize agent behavior.
+
+---
+
+## Bundled prompt files
 
 | File | Role |
 |------|------|
 | `system-prompt.md` | System prompt injected into every agent session |
-| `implementer.md` | Drives the implementation agent |
-| `spec-reviewer.md` | Drives the spec compliance review agent |
-| `code-quality-reviewer.md` | Drives the code quality review agent |
-| `task-agent.md` | Drives the task management agent |
-| `create-task.md` | Sub-prompt for creating a task |
-| `delete-task.md` | Sub-prompt for deleting a task |
-| `link-tasks.md` | Sub-prompt for linking tasks |
-| `unlink-tasks.md` | Sub-prompt for unlinking tasks |
 
 ## How prompts are loaded
 
-At runtime, `shipyard/commands/execute.py` reads prompts using `importlib.resources`:
+At runtime, command modules read prompts using `importlib.resources`:
 
 ```python
 from importlib.resources import files as _res_files
 
-prompt = _res_files("shipyard.data.prompts").joinpath("implementer.md").read_text()
+prompt = _res_files("shipyard.data.prompts").joinpath("system-prompt.md").read_text()
 ```
 
-Placeholder substitution uses Python's built-in `.format()`:
+Because prompts are bundled with the installed package, no filesystem path configuration is needed.
+
+## `system-prompt.md`
+
+**Used by:** every agent session (`tasks`, `execute`, `plan`, `update-docs`).
+
+Injected as the Claude `system` prompt. Sets global behavior constraints shared across all agent roles.
+
+---
+
+## Agent skill files
+
+All agents are implemented as Claude Code skills, not bundled prompts. `shipyard init` installs them into `.claude/skills/` in the target repository.
+
+| Skill file | Role |
+|------------|------|
+| `shipyard-implementer/SKILL.md` | Drives the implementation agent |
+| `shipyard-spec-reviewer/SKILL.md` | Drives the spec compliance review agent |
+| `shipyard-code-quality-reviewer/SKILL.md` | Drives the code quality review agent |
+| `shipyard-planner/SKILL.md` | Drives the initial planning agent |
+| `shipyard-replanner/SKILL.md` | Drives the re-planning agent |
+| `shipyard-doc-agent/SKILL.md` | Drives the documentation update agent |
+| `shipyard-doc-verifier/SKILL.md` | Drives the documentation review agent |
+| `shipyard-task-agent/SKILL.md` | Drives the task-extraction agent (`shipyard tasks`) |
+
+The `shipyard-task-agent` skill directory also contains the MCP tool description files (`create-task.md`, `delete-task.md`, `link-tasks.md`, `unlink-tasks.md`) used as `description` fields for the in-process MCP tools registered by `shipyard tasks`.
+
+### How skill files are invoked
+
+In `execute.py`, the implementer agent is started with:
 
 ```python
-prompt.format(TASK_DESCRIPTION=task_description, CONTEXT=context)
+await client.query(f"Use the shipyard-implementer skill.\n\n{task_context}")
 ```
 
-## `implementer.md`
+In `tasks.py`, the task-extraction agent is started with:
 
-**Used by:** `run_issue_pipeline()` in `execute.py` for each issue.
+```python
+await client.query(f"Use the shipyard-task-agent skill.\n\nThe implementation plan is at: {plan_path}\n")
+```
 
-**Injected placeholders:**
+After the agent populates the task list, `shipyard tasks` runs a review loop — serializing the current task graph and asking the agent to confirm or correct it — before writing `tasks.json`.
 
-| Placeholder | Value |
-|-------------|-------|
-| `{TASK_DESCRIPTION}` | The GitHub Issue body (full text) |
-| `{CONTEXT}` | `"Repository: {repo}\nEpic: #{n} — {title}\n{epic_body}"` plus, on retries, `"\n\n## Reviewer Feedback (attempt N)\n\n{feedback}"` |
+Sub-agents are registered via `AgentDefinition` and invoked by the implementer through the `Agent` tool:
 
-**What it instructs the agent to do:**
+```python
+"spec_reviewer": AgentDefinition(
+    prompt="Use the shipyard-spec-reviewer skill.",
+    tools=["Bash", "Read", "Grep", "Glob"],
+    ...
+)
+```
 
-1. Implement exactly what the task specifies.
-2. Write tests using TDD (failing test first, then implementation).
-3. Verify all tests pass.
-4. Commit with descriptive messages.
-5. Self-review for completeness, quality, discipline, and test coverage.
+### Customizing skill files
 
-The implementer runs in `dontAsk` permission mode with tools: `Bash`, `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Agent`, `Monitor`.
+Edit `.claude/skills/shipyard-*/SKILL.md` in your repository to customize agent behavior. Changes take effect on the next pipeline run without any rebuild or reinstall. Skill files are not bundled into the installed package — they live in your repository.
 
-After the implementer finishes, the pipeline instructs it (via a follow-up `query()`) to invoke the spec reviewer and code quality reviewer as sub-agents, fixing any issues they raise before moving on.
+To reset a skill file to the default bundled version, run:
 
-## `spec-reviewer.md`
-
-**Used by:** `run_issue_pipeline()` as a registered sub-agent, invoked by the implementer after it commits.
-
-**Injected placeholders:**
-
-| Placeholder | Value |
-|-------------|-------|
-| `{TASK_DESCRIPTION}` | The GitHub Issue body |
-| `{CONTEXT}` | Epic title + list of all tasks in the plan |
-| `{BASE_SHA}` | The git SHA recorded before the implementer ran |
-
-**What it instructs the agent to do:**
-
-- Run `git diff {BASE_SHA}..HEAD` to identify what changed.
-- Focus only on the changes — do not review pre-existing code.
-- Check for missing requirements, extra unasked-for work, and misunderstandings.
-- Report findings for the implementer to address.
-
-Tools: `Bash`, `Read`, `Grep`, `Glob`.
-
-## `code-quality-reviewer.md`
-
-**Used by:** `run_issue_pipeline()` as a registered sub-agent, invoked by the implementer after the spec review passes.
-
-**Injected placeholders:**
-
-| Placeholder | Value |
-|-------------|-------|
-| `{TASK_DESCRIPTION}` | The GitHub Issue body |
-| `{CONTEXT}` | Epic title + list of all tasks in the plan |
-| `{BASE_SHA}` | The git SHA recorded before the implementer ran |
-
-**What it instructs the agent to do:**
-
-- Run `git diff --stat {BASE_SHA}..HEAD` and `git diff {BASE_SHA}..HEAD`.
-- Focus only on the changes — do not review pre-existing code.
-- Review: code quality, file structure, testing, architecture, and security.
-- Report findings for the implementer to address.
-
-Tools: `Bash`, `Read`, `Grep`, `Glob`.
-
-## Customizing prompts
-
-The prompts are plain text files included in the installed package under `shipyard/data/prompts/`. To customize them for a fork:
-
-1. Edit the files in `shipyard/data/prompts/` directly.
-2. Rebuild and reinstall the package.
-
-Because `execute.py` reads prompts via `importlib.resources`, any changes take effect on the next run without touching the workflow file.
+```bash
+shipyard init --force
+```

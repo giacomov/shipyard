@@ -115,34 +115,28 @@ def test_set_output_writes_to_file(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_resolve_epic_issues_event():
-    assert resolve_epic_number("issues", 7, "", "owner", "repo") == 7
+def test_resolve_epic_direct_mode():
+    assert resolve_epic_number(7, "", "owner", "repo") == 7
 
 
-def test_resolve_epic_workflow_dispatch():
-    assert resolve_epic_number("workflow_dispatch", 15, "", "owner", "repo") == 15
+def test_resolve_epic_direct_mode_ignores_pr_body():
+    assert resolve_epic_number(15, "Closes #99", "owner", "repo") == 15
 
 
-def test_resolve_epic_unknown_event_raises():
-    with pytest.raises(RuntimeError, match="Unknown EVENT_NAME"):
-        resolve_epic_number("push", None, "", "owner", "repo")
-
-
-def test_resolve_epic_pr_no_closing_references_returns_none(capsys):
-    result = resolve_epic_number("pull_request", None, "no refs here", "owner", "repo")
+def test_resolve_epic_pr_mode_no_closing_references_returns_none():
+    result = resolve_epic_number(None, "no refs here", "owner", "repo")
     assert result is None
 
 
 @patch("shipyard.commands.find_work.gh_graphql")
-def test_resolve_epic_pr_event_graphql_path(mock_gql):
+def test_resolve_epic_pr_mode_graphql_path(mock_gql):
     mock_gql.return_value = {"repository": {"issue": {"parent": {"number": 10}}}}
-    result = resolve_epic_number("pull_request", None, "Closes #5", "owner", "repo")
+    result = resolve_epic_number(None, "Closes #5", "owner", "repo")
     assert result == 10
 
 
 @patch("shipyard.commands.find_work.gh_graphql")
-def test_resolve_epic_pr_no_parent_falls_back_to_scan(mock_gql):
-    # GraphQL returns no parent
+def test_resolve_epic_pr_mode_no_parent_falls_back_to_scan(mock_gql):
     mock_gql.return_value = {"repository": {"issue": {"parent": None}}}
     candidates = [{"number": 99}]
     with (
@@ -152,12 +146,12 @@ def test_resolve_epic_pr_no_parent_falls_back_to_scan(mock_gql):
         mock_gh.return_value = json.dumps(candidates)
         # Issue #5 is a sub-issue of epic #99
         mock_get.return_value = [{"number": 5}]
-        result = resolve_epic_number("pull_request", None, "Closes #5", "owner", "repo")
+        result = resolve_epic_number(None, "Closes #5", "owner", "repo")
     assert result == 99
 
 
 @patch("shipyard.commands.find_work.gh_graphql")
-def test_resolve_epic_pr_graphql_error_falls_back(mock_gql):
+def test_resolve_epic_pr_mode_graphql_error_falls_back(mock_gql):
     mock_gql.side_effect = RuntimeError("GraphQL unavailable")
     candidates = [{"number": 42}]
     with (
@@ -166,7 +160,7 @@ def test_resolve_epic_pr_graphql_error_falls_back(mock_gql):
     ):
         mock_gh.return_value = json.dumps(candidates)
         mock_get.return_value = [{"number": 5}]
-        result = resolve_epic_number("pull_request", None, "Closes #5", "owner", "repo")
+        result = resolve_epic_number(None, "Closes #5", "owner", "repo")
     assert result == 42
 
 
@@ -248,45 +242,70 @@ def test_build_subtask_list_none_body_becomes_empty_string():
 
 
 # ---------------------------------------------------------------------------
-# find-work CLI command — env var guards
+# find-work CLI command — flag guards
 # ---------------------------------------------------------------------------
 
 
-def test_find_work_missing_repo(monkeypatch):
+def test_find_work_missing_repo():
     from click.testing import CliRunner
 
     from shipyard.commands.find_work import find_work
 
-    monkeypatch.delenv("GITHUB_REPOSITORY", raising=False)
-    monkeypatch.setenv("EVENT_NAME", "issues")
     runner = CliRunner()
-    result = runner.invoke(find_work)
+    result = runner.invoke(find_work, ["--issue-number", "5"])
     assert result.exit_code != 0
-    assert "GITHUB_REPOSITORY" in result.output
+    assert "--repo" in result.output
 
 
-def test_find_work_missing_event(monkeypatch):
+def test_find_work_missing_both_issue_number_and_pr_body():
     from click.testing import CliRunner
 
     from shipyard.commands.find_work import find_work
 
-    monkeypatch.setenv("GITHUB_REPOSITORY", "owner/repo")
-    monkeypatch.delenv("EVENT_NAME", raising=False)
     runner = CliRunner()
-    result = runner.invoke(find_work)
+    result = runner.invoke(find_work, ["--repo", "owner/repo"])
     assert result.exit_code != 0
-    assert "EVENT_NAME" in result.output
+    assert "--issue-number" in result.output or "--pr-body" in result.output
 
 
-def test_find_work_issues_event_missing_issue_number(monkeypatch):
-    from click.testing import CliRunner
+# ---------------------------------------------------------------------------
+# resolve_epic_number — sub-issue scan fallback, multi-candidate branches
+# ---------------------------------------------------------------------------
 
-    from shipyard.commands.find_work import find_work
 
-    monkeypatch.setenv("GITHUB_REPOSITORY", "owner/repo")
-    monkeypatch.setenv("EVENT_NAME", "issues")
-    monkeypatch.delenv("ISSUE_NUMBER", raising=False)
-    runner = CliRunner()
-    result = runner.invoke(find_work)
-    assert result.exit_code != 0
-    assert "ISSUE_NUMBER" in result.output
+@patch("shipyard.commands.find_work.gh_graphql")
+def test_resolve_epic_scan_finds_on_second_candidate(mock_gql):
+    mock_gql.side_effect = RuntimeError("GraphQL unavailable")
+    candidates = [{"number": 10}, {"number": 20}]
+
+    def gh_get_side_effect(path: str):
+        if "10/sub_issues" in path:
+            return []  # issue #5 not a sub of candidate 10
+        if "20/sub_issues" in path:
+            return [{"number": 5}]  # issue #5 is a sub of candidate 20
+        return []
+
+    with (
+        patch("shipyard.commands.find_work.gh") as mock_gh,
+        patch("shipyard.commands.find_work.gh_get", side_effect=gh_get_side_effect),
+    ):
+        mock_gh.return_value = json.dumps(candidates)
+        result = resolve_epic_number(None, "Closes #5", "owner", "repo")
+
+    assert result == 20
+
+
+@patch("shipyard.commands.find_work.gh_graphql")
+def test_resolve_epic_scan_all_candidates_fail(mock_gql):
+    mock_gql.side_effect = RuntimeError("GraphQL unavailable")
+    candidates = [{"number": 10}, {"number": 20}]
+
+    with (
+        patch("shipyard.commands.find_work.gh") as mock_gh,
+        patch("shipyard.commands.find_work.gh_get") as mock_get,
+    ):
+        mock_gh.return_value = json.dumps(candidates)
+        mock_get.return_value = []  # no candidate contains issue #5
+        result = resolve_epic_number(None, "Closes #5", "owner", "repo")
+
+    assert result is None

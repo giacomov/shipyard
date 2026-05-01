@@ -88,13 +88,10 @@ def add_blocked_by(
 
 def task_body(subtask: Subtask) -> str:
     """Format the GitHub issue body for a Subtask."""
-    status_emoji = {"pending": "⬜", "in_progress": "🔄", "completed": "✅"}
-    emoji = status_emoji.get(subtask.status, "⬜")
     lines = []
     if subtask.description:
         lines.append(subtask.description)
         lines.append("")
-    lines.append(f"**Status:** {emoji} `{subtask.status}`")
     if subtask.blocked_by:
         lines.append(f"**Depends on task IDs:** {', '.join(sorted(subtask.blocked_by))}")
     return "\n".join(lines)

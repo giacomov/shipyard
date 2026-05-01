@@ -21,17 +21,17 @@ Shipyard uses GitHub Issues as its persistent task board. This document explains
 
 ## How `shipyard find-work` resolves the epic
 
-The resolution strategy depends on `$EVENT_NAME`:
+The resolution strategy depends on which flag is provided:
 
-### `issues` or `workflow_dispatch`
+### Direct mode (`--issue-number`)
 
-`$ISSUE_NUMBER` is used directly as the epic number. No lookup is needed.
+The issue number is used directly as the epic number. No lookup is needed.
 
-### `pull_request` (PR merged)
+### PR mode (`--pr-body`)
 
 When a PR is merged, `find-work` needs to determine which epic it belongs to:
 
-1. **Parse closing references** — scan `$PR_BODY` for `closes/fixes/resolves #N` patterns. Collects all referenced issue numbers.
+1. **Parse closing references** — scan the PR body for `closes/fixes/resolves #N` patterns. Collects all referenced issue numbers.
 
 2. **GraphQL parent lookup** — for each referenced issue number, query the GraphQL API for its parent issue. If a parent exists, that parent is the epic.
 
@@ -70,7 +70,7 @@ The `gh` CLI must be authenticated with a token that has:
 ```yaml
 permissions:
   contents: read
-  issues: read
+  issues: write     # needed to close completed issues on PR merge
   pull-requests: read
 ```
 

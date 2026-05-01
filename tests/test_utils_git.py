@@ -5,11 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from shipyard.utils.git import (
-    add,
-    checkout_branch,
     checkout_new_branch,
-    commit,
-    fetch,
     git,
     push,
     reset_hard,
@@ -73,65 +69,6 @@ def test_checkout_new_branch_calls_git() -> None:
 
     mock_run.assert_called_once_with(
         ["git", "checkout", "-b", "feature/my-branch"], capture_output=True, text=True
-    )
-
-
-# ---------------------------------------------------------------------------
-# checkout_branch()
-# ---------------------------------------------------------------------------
-
-
-def test_checkout_branch_calls_git() -> None:
-    with patch("subprocess.run", return_value=_ok()) as mock_run:
-        checkout_branch("main")
-
-    mock_run.assert_called_once_with(["git", "checkout", "main"], capture_output=True, text=True)
-
-
-# ---------------------------------------------------------------------------
-# fetch()
-# ---------------------------------------------------------------------------
-
-
-def test_fetch_defaults_to_origin() -> None:
-    with patch("subprocess.run", return_value=_ok()) as mock_run:
-        fetch()
-
-    mock_run.assert_called_once_with(["git", "fetch", "origin"], capture_output=True, text=True)
-
-
-def test_fetch_uses_given_remote() -> None:
-    with patch("subprocess.run", return_value=_ok()) as mock_run:
-        fetch("upstream")
-
-    mock_run.assert_called_once_with(["git", "fetch", "upstream"], capture_output=True, text=True)
-
-
-# ---------------------------------------------------------------------------
-# add()
-# ---------------------------------------------------------------------------
-
-
-def test_add_stages_paths() -> None:
-    with patch("subprocess.run", return_value=_ok()) as mock_run:
-        add(["foo.py", "bar.py"])
-
-    mock_run.assert_called_once_with(
-        ["git", "add", "foo.py", "bar.py"], capture_output=True, text=True
-    )
-
-
-# ---------------------------------------------------------------------------
-# commit()
-# ---------------------------------------------------------------------------
-
-
-def test_commit_uses_message() -> None:
-    with patch("subprocess.run", return_value=_ok()) as mock_run:
-        commit("fix: correct typo")
-
-    mock_run.assert_called_once_with(
-        ["git", "commit", "-m", "fix: correct typo"], capture_output=True, text=True
     )
 
 

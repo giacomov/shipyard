@@ -23,6 +23,7 @@ jobs:
     outputs:
       has_work: ${{ steps.find-work.outputs.has_work }}
       work_json: ${{ steps.find-work.outputs.work_json }}
+      epic_in_progress: ${{ steps.find-work.outputs.epic_in_progress }}
 
     steps:
       - uses: astral-sh/setup-uv@v4
@@ -47,11 +48,13 @@ jobs:
         id: find-work
         env:
           GH_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          EVENT_NAME: ${{ github.event_name }}
-          ISSUE_NUMBER: ${{ github.event.issue.number || '' }}
           PR_BODY: ${{ github.event.pull_request.body || '' }}
-        run: shipyard find-work
+        run: |
+          ISSUE="${{ github.event.issue.number }}"
+          shipyard find-work \
+            --repo "${{ github.repository }}" \
+            ${ISSUE:+--issue-number "$ISSUE"} \
+            --pr-body "$PR_BODY"
 
   execute:
     name: Execute tasks with Agent SDK
@@ -96,6 +99,7 @@ jobs:
           echo "SHIPYARD_EPIC_BRANCH=$EPIC_BRANCH" >> "$GITHUB_ENV"
 
       - name: Run agent pipeline
+        id: run-pipeline
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           GH_TOKEN: ${{ github.token }}
@@ -106,6 +110,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: shipyard publish-execution --branch "$SHIPYARD_BRANCH" --base-branch "$SHIPYARD_EPIC_BRANCH" -i /tmp/work.json
+
+      - name: Post failure comment on epic issue
+        if: failure() && steps.run-pipeline.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          EPIC=$(python3 -c "import json; print(json.load(open('/tmp/work.json'))['epic_id'])")
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          gh issue comment "$EPIC" --repo "${{ github.repository }}" \
+            --body "Shipyard pipeline failed. See the [action run]($RUN_URL) for details."
 
   update-docs:
     name: Update documentation

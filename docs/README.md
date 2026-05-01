@@ -12,15 +12,16 @@ Shipyard is an agentic GitHub Actions pipeline that autonomously implements GitH
 
 | Doc | Contents |
 |-----|----------|
-| [CLI reference](reference/cli.md) | All eight CLI commands with flags and examples |
+| [CLI reference](reference/cli.md) | All nine CLI commands with flags and examples |
 | [Task format](reference/task-format.md) | Markdown plan syntax, JSON schemas, round-trip example |
 | [Workflows](reference/workflow.md) | `epic-driver.yml`, `plan-driver.yml`, `sync-driver.yml` jobs, secrets |
 | [Agent prompts](reference/agent-prompts.md) | Bundled prompts and how to customize them |
+| [Settings](reference/settings.md) | All `SHIPYARD_*` environment variables |
 
 ## Explanation
 
 | Doc | Contents |
 |-----|----------|
-| [Architecture](explanation/architecture.md) | Problem, component overview, codemap, invariants |
+| [Architecture](../ARCHITECTURE.md) | Problem, component overview, codemap, invariants |
 | [Agent pipeline](explanation/agent-pipeline.md) | Three-agent pipeline, retry logic, failure handling |
 | [GitHub integration](explanation/github-integration.md) | Issues, sub-issues, blocked-by, epic resolution, permissions |

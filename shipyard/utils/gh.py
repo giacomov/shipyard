@@ -94,11 +94,6 @@ def parse_closing_references(body: str) -> list[int]:
     return [int(m.group(1)) for m in pattern.finditer(body)]
 
 
-def post_issue_comment(repo: str, issue_number: int, body: str) -> None:
-    """Post a comment on a GitHub issue."""
-    gh(["issue", "comment", str(issue_number), "--repo", repo, "--body", body])
-
-
 def create_pull_request(
     repo: str, branch: str, title: str, body: str, base: str = settings.pr_base_branch
 ) -> str:

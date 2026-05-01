@@ -12,7 +12,6 @@ class Settings(BaseSettings):
     results_file: str = "shipyard-results.json"
     plans_dir: str = "plans"
     pr_base_branch: str = "main"
-    implementer_max_retries: int = 1
     planner_max_retries: int = 5
 
     planning_model: str = "opus"
