@@ -11,7 +11,7 @@ Shipyard uses GitHub Issues as its persistent task board. This document explains
    - The database ID is fetched via `gh api repos/{owner}/{repo}/issues/{number}` (required for sub-issue linking).
 
 2. **Create one sub-issue per task** — same `gh issue create` call for each task.
-   - The issue body includes the task description, status emoji, and dependency IDs.
+   - The issue body includes the task description and dependency IDs.
 
 3. **Link sub-issues to the epic** — `gh api repos/{owner}/{repo}/issues/{epic}/sub_issues --method POST -F sub_issue_id={child_db_id}`
    - Uses the GitHub Issues preview API (`--preview issues`).

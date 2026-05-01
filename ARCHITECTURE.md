@@ -18,6 +18,7 @@ Shipyard solves the coordination problem in agentic coding: given a multi-task i
 shipyard/
   cli.py               # Click entry point; wires all commands into the `shipyard` group
   settings.py          # Settings: SHIPYARD_* env var config with defaults
+  sim.py               # Sim mode flag: is_sim_mode() reads SHIPYARD_SIM_MODE; used by agent.py and gh.py
   commands/
     init.py            # shipyard init — copies workflow templates, substitutes SHIPYARD_VERSION
     tasks.py           # shipyard tasks — runs an AI agent to extract tasks from a markdown plan; writes tasks.json
@@ -32,11 +33,11 @@ shipyard/
     skills/            # agent skill SKILL.md files installed into the target repo by `shipyard init`
     templates/         # epic-driver.yml, review-driver.yml, plan-driver.yml, sync-driver.yml with SHIPYARD_VERSION placeholder
   schemas/
-    subtask.py         # Subtask: task_id, title, description, status, blocked_by
+    subtask.py         # Subtask: task_id, title, description, blocked_by
     subtask_list.py    # SubtaskList: epic_id, title, description, tasks dict; shared by tasks.json and work JSON
   utils/
     git.py             # git subprocess wrappers: checkout, push, reset, get_head_sha
-    gh.py              # gh CLI wrappers: post_issue_comment, create_pull_request, GitHub output helpers
+    gh.py              # gh CLI wrappers: gh, resolve_repo, create_pull_request, close_issues_body, GitHub output helpers
     github_event.py    # extract-github-event command + event parsing helpers
     agent.py           # SimSDKClient, get_sdk_client, and receive_from_client helpers
 ```
@@ -63,7 +64,7 @@ Key types: `SubtaskList` (the shared schema between `shipyard tasks` output and 
 
 **Error handling:** In the pipeline, any exception during a task's agent run triggers `reset_fn(base_sha)` to reset git state. The workflow then posts a failure comment on the epic issue (normal mode) or the PR (revision mode) with a link to the action run. Execution continues to the next task. `shipyard execute` exits 1 if any task failed.
 
-**Configuration:** Local commands (`init`, `tasks`, `sync`) use CLI flags. CI commands (`find-work`, `execute`, `plan`, `publish-execution`) use environment variables exclusively — `GITHUB_REPOSITORY`, `EVENT_NAME`, `ISSUE_NUMBER`, `CLAUDE_CODE_OAUTH_TOKEN`, etc. `update-docs` is also CI-only; it reads model/effort settings from environment variables and accepts `--base-sha` as a CLI flag injected by the workflow.
+**Configuration:** Local commands (`init`, `tasks`, `sync`) use CLI flags. CI commands (`find-work`, `execute`, `plan`, `publish-execution`, `update-docs`) are invoked by the surrounding workflow steps with CLI flags for per-run parameters (e.g., `--repo`, `-i`, `--branch`, `--base-sha`) and read cross-cutting settings from environment variables (`GITHUB_REPOSITORY`, `CLAUDE_CODE_OAUTH_TOKEN`, `SHIPYARD_*` model/effort vars, etc.).
 
 **Authentication:** The `gh` CLI handles all GitHub authentication (personal access token or OIDC). The `CLAUDE_CODE_OAUTH_TOKEN` environment variable authenticates calls to the Claude Code API and is unrelated to GitHub auth.
 

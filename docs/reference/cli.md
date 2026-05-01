@@ -20,7 +20,7 @@ Set up the Shipyard workflows in a repository.
 |------|------|-------------|
 | `PATH` | positional argument | Target repository directory (default: `.`) |
 | `--force` | flag | Overwrite existing workflow files and skill files |
-| `--skip-plan-driver` | flag | Only install `epic-driver.yml`, skip `plan-driver.yml` and `sync-driver.yml` |
+| `--skip-plan-driver` | flag | Only install `epic-driver.yml` and `review-driver.yml`, skip `plan-driver.yml` and `sync-driver.yml` |
 | `--dev BRANCH` | option | Install shipyard from this branch instead of the pinned version |
 
 **Outputs:**
@@ -222,7 +222,7 @@ Run the three-agent pipeline for unblocked issues.
 
 **Outputs:**
 
-- Writes `shipyard-results.json` with `{ "successful": [<task ids>], "failed": [<task ids>] }`.
+- **Normal mode only:** writes `shipyard-results.json` with `{ "successful": [<task ids>], "failed": [<task ids>] }`. Revision mode does not write a results file.
 - Exits non-zero if any issues failed.
 
 Does **not** create a branch, push, or open a PR — that is handled by `shipyard publish-execution`.
@@ -260,7 +260,7 @@ Push the implementation branch and open a pull request.
 
 Parse a GitHub Actions event and write structured outputs for use in subsequent workflow steps.
 
-**Purpose:** Reads the event JSON at `$GITHUB_EVENT_PATH`, determines the trigger type (issue comment with `/ship plan`/`/ship replan`, or pull request review with `CHANGES_REQUESTED`), fetches any needed issue/PR context via `gh`, and writes structured outputs to `$GITHUB_OUTPUT`. Also writes `prompt.txt` (and optionally `review-feedback.txt`) for `shipyard plan`. Called by the `plan` job in `plan-driver.yml`.
+**Purpose:** Reads the event JSON at `$GITHUB_EVENT_PATH`, determines the trigger type (issue comment with `/ship plan`/`/ship replan`, or pull request review with `CHANGES_REQUESTED`), fetches any needed issue/PR context via `gh`, and writes structured outputs to `$GITHUB_OUTPUT`. Also writes `prompt.txt` (and optionally `review-feedback.txt`) for `shipyard plan` and `shipyard execute` (revision mode). Called by the `plan` job in `plan-driver.yml` and by the `revise` job in `review-driver.yml`.
 
 **Configuration:** Entirely via environment variables (set by the workflow):
 
@@ -278,8 +278,6 @@ Parse a GitHub Actions event and write structured outputs for use in subsequent 
 | `issue_title` | `/ship plan` comment on issue, or re-plan of a plan PR |
 | `has_review` | Always (`"true"` or `"false"`) |
 | `pr_number` | Review event, or `/ship replan` comment on a plan PR |
-| `branch_name` | Implementation PR review event only |
-| `review_target` | Review event, or `/ship replan` comment on a plan PR |
 
 **Side effects:** Writes `prompt.txt` containing the issue/task context for `shipyard plan`. On review events, also writes `review-feedback.txt` combining the review summary and inline comments.
 

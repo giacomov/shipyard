@@ -22,8 +22,9 @@ Run this from the root of the repository where you want the pipeline to run:
 shipyard init
 ```
 
-This creates three workflow files under `.github/workflows/`:
+This creates four workflow files under `.github/workflows/`:
 - `epic-driver.yml` — runs the agent pipeline when a `/ship run` comment is posted or when a Shipyard implementation PR is merged
+- `review-driver.yml` — addresses PR review feedback autonomously when a reviewer requests changes
 - `plan-driver.yml` — generates implementation plans from `/ship plan` comments
 - `sync-driver.yml` — converts merged plan PRs into GitHub Issues
 

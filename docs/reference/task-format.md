@@ -55,7 +55,6 @@ Output of `shipyard tasks`. This is also the input format for `shipyard sync`.
       "task_id": "string — the task number as a string (e.g. \"1\")",
       "title": "string — task title",
       "description": "string — task description",
-      "status": "string — always \"pending\"",
       "blocked_by": ["string"]
     }
   }
@@ -66,7 +65,6 @@ Output of `shipyard tasks`. This is also the input format for `shipyard sync`.
 - `tasks` is a dict keyed by `task_id`, not an array.
 - `task_id` is a string, not an integer (`"1"` not `1`).
 - `blocked_by` is a list of `task_id` strings referencing other tasks.
-- `status` is always `"pending"` when output by `shipyard tasks`; it is informational and not used by `shipyard sync`.
 - `description` at the top level contains the full markdown plan content.
 
 ## Work JSON schema
@@ -83,7 +81,6 @@ Output of `shipyard find-work`. This is the input to `shipyard execute` via `-i 
       "task_id": "43",
       "title": "string — title of the sub-issue",
       "description": "string — body of the sub-issue",
-      "status": "pending",
       "blocked_by": []
     }
   }
@@ -148,14 +145,12 @@ shipyard tasks -i plan.md --title "Sample Feature Implementation Plan"
       "task_id": "1",
       "title": "Setup",
       "description": "Create the project scaffold.\n\n- [ ] **Step 1: Write the test**\n...",
-      "status": "pending",
       "blocked_by": []
     },
     "2": {
       "task_id": "2",
       "title": "Implementation",
       "description": "Implement the main feature using the scaffold from Task 1.\n...",
-      "status": "pending",
       "blocked_by": ["1"]
     }
   }
@@ -185,7 +180,6 @@ Creates:
       "task_id": "12",
       "title": "Implementation",
       "description": "Implement the main feature using the scaffold from Task 1.\n...",
-      "status": "pending",
       "blocked_by": []
     }
   }

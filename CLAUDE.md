@@ -13,7 +13,7 @@ Detailed documentation lives in `docs/`. Before making changes, read the relevan
 | `docs/explanation/agent-pipeline.md` | Three-agent pipeline, retry logic, failure handling |
 | `docs/reference/task-format.md` | Markdown plan syntax, JSON schemas |
 | `docs/explanation/github-integration.md` | Issues, sub-issues, blocked-by, epic resolution, permissions |
-| `docs/reference/workflow.md` | `epic-driver.yml`, `plan-driver.yml`, `sync-driver.yml` jobs, secrets, data flow |
+| `docs/reference/workflow.md` | `epic-driver.yml`, `plan-driver.yml`, `sync-driver.yml`, `review-driver.yml` jobs, secrets, data flow |
 | `docs/reference/agent-prompts.md` | Prompt files, placeholder substitution, customization |
 
 ## Commands
@@ -98,7 +98,7 @@ shipyard/
   data/
     prompts/           # system-prompt.md — system prompt injected into every agent session
     skills/            # bundled Claude Code skills
-    templates/         # epic-driver.yml, plan-driver.yml, and sync-driver.yml with SHIPYARD_VERSION placeholder
+    templates/         # epic-driver.yml, review-driver.yml, plan-driver.yml, sync-driver.yml with SHIPYARD_VERSION placeholder
   utils/
     git.py             # git subprocess wrappers
     gh.py              # gh CLI wrappers + GitHub output helpers
@@ -120,7 +120,7 @@ GitHub Issues are the only persistent store — no database. The epic issue is t
 
 ### Key design constraints
 
-- `find_work.py`, `execute.py`, and `publish.py` are CI-only (driven entirely by env vars, no interactive options).
+- `find_work.py`, `execute.py`, `publish.py`, `plan.py`, and `update_docs.py` are CI-only — not intended for direct use outside CI. All operational parameters are passed as CLI flags by the surrounding workflow steps.
 - All GitHub API calls in `sync.py` and `find_work.py` go through the `gh` CLI as subprocesses.
 - The bundled workflow templates use `SHIPYARD_VERSION` as a placeholder; `shipyard init` substitutes it with the package version (or the given branch when `--dev BRANCH` is passed).
 - PRs are opened against the epic base branch passed via `--base-branch` to `shipyard publish-execution` (default: `settings.pr_base_branch`, which is `main`).
