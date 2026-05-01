@@ -24,6 +24,18 @@ if [ "${SHIPYARD_SIM_MODE}" = "true" ]; then
       # origin/* refs don't exist because fetch is suppressed; return HEAD SHA instead
       exec /usr/bin/git.real rev-parse HEAD
       ;;
+    branch)
+      # actions/checkout probes "git branch --list --remote origin/shipyard/*" before checkout.
+      # Fake existence of shipyard/* remote branches (never pushed in sim mode) so checkout proceeds.
+      if [[ "$*" == *"--list"* ]] && [[ "$*" == *"--remote"* ]] && [[ "$*" == *"shipyard/"* ]]; then
+        for arg in "$@"; do
+          if [[ "$arg" == *"shipyard/"* ]]; then
+            echo "  remotes/$arg"
+          fi
+        done
+        exit 0
+      fi
+      ;;
     checkout)
       # Simple "git checkout <branchname>" (no flags): fall back to -b if the branch doesn't exist.
       if [ $# -eq 2 ] && [[ "$2" != -* ]]; then
