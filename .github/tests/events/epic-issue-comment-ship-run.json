@@ -1,0 +1,13 @@
+{
+  "action": "created",
+  "comment": {
+    "id": 1,
+    "body": "/ship run",
+    "author_association": "OWNER",
+    "user": { "login": "giacomov" }
+  },
+  "issue": {
+    "number": 42,
+    "title": "My epic issue"
+  }
+}

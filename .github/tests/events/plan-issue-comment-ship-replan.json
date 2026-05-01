@@ -1,0 +1,13 @@
+{
+  "action": "created",
+  "comment": {
+    "id": 3,
+    "body": "/ship replan Please revise section 2 to cover edge cases.",
+    "author_association": "OWNER",
+    "user": { "login": "giacomov" }
+  },
+  "issue": {
+    "number": 17,
+    "title": "Add user authentication flow"
+  }
+}

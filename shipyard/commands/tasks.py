@@ -17,6 +17,7 @@ from claude_agent_sdk import (
 
 from shipyard.schemas import Subtask, SubtaskList
 from shipyard.settings import settings
+from shipyard.sim import is_sim_mode
 from shipyard.utils.agent import get_sdk_client, receive_from_client
 
 _system_prompt = _res_files("shipyard.data.prompts").joinpath("system-prompt.md").read_text()
@@ -296,6 +297,14 @@ def tasks(input_file: str, output_file: str | None, title: str) -> None:
             f"Use the shipyard-task-agent skill.\n\nThe implementation plan is at: {plan_path}\n"
         )
         asyncio.run(_run_task_agent(prompt, cwd=os.getcwd(), task_list=task_list))
+
+        if is_sim_mode() and not task_list.tasks:
+            task_list.tasks["T-001"] = Subtask(
+                task_id="T-001",
+                title="[Sim] Placeholder task",
+                description="Simulated task produced in sim mode.",
+            )
+            task_list.committed = True
 
     except ProcessError as e:
         raise click.ClickException(

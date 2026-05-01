@@ -25,13 +25,24 @@ if [ "${SHIPYARD_SIM_MODE}" = "true" ]; then
       exec /usr/bin/git.real rev-parse HEAD
       ;;
     checkout)
-      # Only intercept simple "git checkout <branchname>" (no flags): fall back to -b if the
-      # branch doesn't exist locally. Leave flag-bearing calls (e.g. from actions/checkout)
-      # untouched so internal git operations aren't mangled.
+      # Simple "git checkout <branchname>" (no flags): fall back to -b if the branch doesn't exist.
       if [ $# -eq 2 ] && [[ "$2" != -* ]]; then
         /usr/bin/git.real checkout "$2" 2>/dev/null && exit 0
         exec /usr/bin/git.real checkout -b "$2"
       fi
+      # Flag-bearing checkouts (e.g. actions/checkout uses --progress --force -B <branch> <sha>):
+      # try as-is first; on failure, if -B was requested create the branch from origin/main
+      # so the workflow can proceed even when the branch doesn't exist on the remote.
+      if /usr/bin/git.real checkout "$@" 2>/dev/null; then
+        exit 0
+      fi
+      prev=""
+      for arg in "$@"; do
+        if [ "$prev" = "-B" ]; then
+          exec /usr/bin/git.real checkout -B "$arg" refs/remotes/origin/main
+        fi
+        prev="$arg"
+      done
       ;;
   esac
 fi

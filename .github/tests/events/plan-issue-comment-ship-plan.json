@@ -1,0 +1,14 @@
+{
+  "action": "created",
+  "comment": {
+    "id": 2,
+    "body": "/ship plan",
+    "author_association": "OWNER",
+    "user": { "login": "giacomov" }
+  },
+  "issue": {
+    "number": 17,
+    "title": "Add user authentication flow",
+    "body": "We need OAuth2 support for the API."
+  }
+}
